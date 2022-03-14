@@ -1,92 +1,150 @@
 #include <iostream>
-#include <fstream>
 #include <R.h>
-using namespace std;
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
+#include "matrixgpufunctions.h"
+
+typedef double datatype_t;
 
 
-__global__ void Rkendall_gpu_atomic(const double* col1, const double* col2, const int n, const int m, unsigned long long* R){
-  int row1 = blockIdx.y * blockDim.y + threadIdx.y;
-  int row2 = blockIdx.x * blockDim.x + threadIdx.x;
-  if (row1 < row2 && row2 < n){
-    if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
-      atomicAdd(R, 1);
+extern "C" void matrix_multiplication(datatype_t* a, datatype_t* b, datatype_t* c, int* n1, int* m1, int* n2, int* m2){
+  if (*m1 == *n2){
+    thrust::device_vector<datatype_t> da(a, a + *n1 * *m1);
+    thrust::device_vector<datatype_t> db(b, b + *n2 * *m2);
+
+    thrust::device_vector<datatype_t> dc(*n1 * *m2, 0);
+    datatype_t* da_ptr = thrust::raw_pointer_cast(da.data());
+    datatype_t* db_ptr = thrust::raw_pointer_cast(db.data());
+    datatype_t* dc_ptr = thrust::raw_pointer_cast(dc.data());
+
+    int threads = 16;
+    int blocks_in_row = (*m2 + threads - 1) / threads;
+    int blocks_in_col = (*n1 + threads - 1) / threads;
+
+    dim3 THREADS(threads, threads);
+    dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+    matrix_mul_gpu<<<BLOCKS, THREADS>>>(da_ptr, db_ptr, dc_ptr, *n1, *m1, *m2);
+    cudaDeviceSynchronize();
+
+    for(int i = 0; i < *n1; i++){
+      for(int j = 0; j < *m2; j++){
+        c[j * *n1 + i] = dc[i * *m2 + j];
+      }
     }
   }
 }
 
 
-extern "C" void matrix_Kendall_distance(double* a, double* c, int* n, int* m){
-  size_t dataset_column_size = *n * sizeof(double);
-  size_t reverse_max_size = sizeof(unsigned long long);
-  for (int col1 = 0; col1 < *m; col1++){
-    double* first_column_device_ptr;
-    cudaMalloc(&first_column_device_ptr, dataset_column_size);
-    cudaMemcpy(first_column_device_ptr, a + col1 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-    for (int col2 = col1 + 1; col2 < *m; col2 ++){
-      double* second_column_device_ptr;
-      cudaMalloc(&second_column_device_ptr, dataset_column_size);
-      cudaMemcpy(second_column_device_ptr, a + col2 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-      unsigned long long host_R = 0;
-      unsigned long long* device_R;
-      cudaMalloc(&device_R, reverse_max_size);
-      cudaMemcpy(device_R, &host_R, reverse_max_size, cudaMemcpyHostToDevice);
-      int threads = 16;
-      int blocks_in_row = (*n + threads - 1) / threads;
-      int blocks_in_col = (*n + threads - 1) / threads;
+extern "C" void matrix_L1_distance(datatype_t* a, datatype_t* c, int* n, int* m){
+  thrust::device_vector<datatype_t> d_matrix(a, a + *n * *m);
 
-      dim3 THREADS(threads, threads);
-      dim3 BLOCKS(blocks_in_row, blocks_in_col);
+  thrust::device_vector<datatype_t> d_dist_matrix(*m * *m, 0);
+  datatype_t* dm_ptr = thrust::raw_pointer_cast(d_matrix.data());
+  datatype_t* ddm_ptr = thrust::raw_pointer_cast(d_dist_matrix.data());
 
-      Rkendall_gpu_atomic<<<BLOCKS, THREADS>>>(first_column_device_ptr, second_column_device_ptr, *n, *m, device_R);
-      cudaDeviceSynchronize();
+  int threads = 16;
+  int blocks_in_row = (*m + threads - 1) / threads;
+  int blocks_in_col = (*m + threads - 1) / threads;
 
-      cudaMemcpy(&host_R, device_R, reverse_max_size, cudaMemcpyDeviceToHost);
-      c[col1 * *m + col2] = host_R * 2.0 / *n / (*n - 1);
-      c[col2 * *m + col1] = c[col1 * *m + col2];
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
 
-      cudaFree(second_column_device_ptr);
-      cudaFree(device_R);
-    }
-    cudaFree(first_column_device_ptr);
-  }
+  matrix_dist_L1_gpu<<<BLOCKS, THREADS>>>(dm_ptr, ddm_ptr, *n, *m);
+  cudaDeviceSynchronize();
+
+  thrust::copy(d_dist_matrix.begin(), d_dist_matrix.end(), c);
+
 }
 
 
-extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){
-  ofstream RESULTFILE(*fout, ios::binary|ios::app);
-  size_t dataset_column_size = *n * sizeof(double);
-  size_t reverse_max_size = sizeof(unsigned long long);
-  for (int col1 = 0; col1 < *m; col1++){
-    double* first_column_device_ptr;
-    cudaMalloc(&first_column_device_ptr, dataset_column_size);
-    cudaMemcpy(first_column_device_ptr, a + col1 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-    for (int col2 = col1 + 1; col2 < *m; col2 ++){
-      double* second_column_device_ptr;
-      cudaMalloc(&second_column_device_ptr, dataset_column_size);
-      cudaMemcpy(second_column_device_ptr, a + col2 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-      unsigned long long host_R = 0;
-      unsigned long long* device_R;
-      cudaMalloc(&device_R, reverse_max_size);
-      cudaMemcpy(device_R, &host_R, reverse_max_size, cudaMemcpyHostToDevice);
-      int threads = 16;
-      int blocks_in_row = (*n + threads - 1) / threads;
-      int blocks_in_col = (*n + threads - 1) / threads;
+extern "C" void matrix_L2_distance(datatype_t* a, datatype_t* c, int* n, int* m){
+  thrust::device_vector<datatype_t> d_matrix(a, a + *n * *m);
 
-      dim3 THREADS(threads, threads);
-      dim3 BLOCKS(blocks_in_row, blocks_in_col);
+  thrust::device_vector<datatype_t> d_dist_matrix(*m * *m, 0);
+  datatype_t* dm_ptr = thrust::raw_pointer_cast(d_matrix.data());
+  datatype_t* ddm_ptr = thrust::raw_pointer_cast(d_dist_matrix.data());
 
-      Rkendall_gpu_atomic<<<BLOCKS, THREADS>>>(first_column_device_ptr, second_column_device_ptr, *n, *m, device_R);
-      cudaDeviceSynchronize();
+  int threads = 16;
+  int blocks_in_row = (*m + threads - 1) / threads;
+  int blocks_in_col = (*m + threads - 1) / threads;
 
-      cudaMemcpy(&host_R, device_R, reverse_max_size, cudaMemcpyDeviceToHost);
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
 
-      double distance = host_R * 2.0 / *n / (*n - 1);
-      RESULTFILE.write((char*)&distance, sizeof(distance));
+  matrix_dist_L2_gpu<<<BLOCKS, THREADS>>>(dm_ptr, ddm_ptr, *n, *m);
+  cudaDeviceSynchronize();
 
-      cudaFree(second_column_device_ptr);
-      cudaFree(device_R);
-    }
-    cudaFree(first_column_device_ptr);
-  }
-  RESULTFILE.close();
+  thrust::copy(d_dist_matrix.begin(), d_dist_matrix.end(), c);
+
+}
+
+
+extern "C" void matrix_Linf_distance(datatype_t* a, datatype_t* c, int* n, int* m){
+  thrust::device_vector<datatype_t> d_matrix(a, a + *n * *m);
+
+  thrust::device_vector<datatype_t> d_dist_matrix(*m * *m, 0);
+  datatype_t* dm_ptr = thrust::raw_pointer_cast(d_matrix.data());
+  datatype_t* ddm_ptr = thrust::raw_pointer_cast(d_dist_matrix.data());
+
+  int threads = 16;
+  int blocks_in_row = (*m + threads - 1) / threads;
+  int blocks_in_col = (*m + threads - 1) / threads;
+
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+  matrix_dist_Linf_gpu<<<BLOCKS, THREADS>>>(dm_ptr, ddm_ptr, *n, *m);
+  cudaDeviceSynchronize();
+
+  thrust::copy(d_dist_matrix.begin(), d_dist_matrix.end(), c);
+
+}
+
+
+extern "C" void matrix_Kendall_distance(datatype_t* a, datatype_t* c, int* n, int* m){
+  thrust::device_vector<datatype_t> d_matrix(a, a + *n * *m);
+
+  thrust::device_vector<datatype_t> d_dist_matrix(*m * *m, 0);
+  thrust::device_vector<int> R(*m * *m, 0);
+  datatype_t* dm_ptr = thrust::raw_pointer_cast(d_matrix.data());
+  datatype_t* ddm_ptr = thrust::raw_pointer_cast(d_dist_matrix.data());
+  int* r_ptr = thrust::raw_pointer_cast(R.data());
+
+  int threads = 16;
+  int blocks_in_row = (*m + threads - 1) / threads;
+  int blocks_in_col = (*m + threads - 1) / threads;
+
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+  matrix_dist_Kendall_gpu<<<BLOCKS, THREADS>>>(dm_ptr, ddm_ptr, *n, *m, r_ptr);
+  cudaDeviceSynchronize();
+
+  thrust::copy(d_dist_matrix.begin(), d_dist_matrix.end(), c);
+
+}
+
+
+extern "C" void matrix_Kendall_distance_naive(datatype_t* a, datatype_t* c, int* n, int* m){
+  thrust::device_vector<datatype_t> d_matrix(a, a + *n * *m);
+
+  thrust::device_vector<datatype_t> d_dist_matrix(*m * *m, 0);
+  thrust::device_vector<int> R(*m * *m, 0);
+  datatype_t* dm_ptr = thrust::raw_pointer_cast(d_matrix.data());
+  datatype_t* ddm_ptr = thrust::raw_pointer_cast(d_dist_matrix.data());
+  int* r_ptr = thrust::raw_pointer_cast(R.data());
+
+  int threads = 16;
+  int blocks_in_row = (*m + threads - 1) / threads;
+  int blocks_in_col = (*m + threads - 1) / threads;
+
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+  matrix_dist_Kendall_gpu_naive<<<BLOCKS, THREADS>>>(dm_ptr, ddm_ptr, *n, *m, r_ptr);
+  cudaDeviceSynchronize();
+
+  thrust::copy(d_dist_matrix.begin(), d_dist_matrix.end(), c);
+
 }

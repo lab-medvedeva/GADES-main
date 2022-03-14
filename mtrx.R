@@ -1,55 +1,119 @@
-mtrx_Kendall_distance <- function(a, filename = "")
+mtrx_mul <- function(a, b)
+{
+  if(!is.loaded("matrix_multiplication")) {
+    dyn.load("mtrx.so")
+  }
+  tmp_a = t(a)
+  tmp_b = t(b)
+  n1 <- nrow(a)
+  m1 <- ncol(a)
+  n2 <- nrow(b)
+  m2 <- ncol(b)
+  c <- vector(length = n1 * m2)
+  rst <- .C("matrix_multiplication",
+            as.double(tmp_a),
+            as.double(tmp_b),
+            as.double(c),
+            as.integer(n1),
+            as.integer(m1),
+            as.integer(n2),
+            as.integer(m2))
+  tmp <- as.vector(rst[[3]])
+  dim(tmp) <- c(n1, m2)
+  return(tmp)
+}
+
+mtrx_L1 <- function(a)
+{
+  if(!is.loaded("matrix_L1_distance")) {
+    dyn.load("mtrx.so")
+  }
+  tmp_a = t(a)
+  n <- nrow(a)
+  m <- ncol(a)
+  c <- vector(length = m * m)
+  rst <- .C("matrix_L1_distance",
+            as.double(tmp_a),
+            as.double(c),
+            as.integer(n),
+            as.integer(m))
+  tmp <- as.vector(rst[[2]])
+  dim(tmp) <- c(m, m)
+  return(tmp)
+}
+
+mtrx_L2 <- function(a)
+{
+  if(!is.loaded("matrix_L2_distance")) {
+    dyn.load("mtrx.so")
+  }
+  tmp_a = t(a)
+  n <- nrow(a)
+  m <- ncol(a)
+  c <- vector(length = m * m)
+  rst <- .C("matrix_L2_distance",
+            as.double(tmp_a),
+            as.double(c),
+            as.integer(n),
+            as.integer(m))
+  tmp <- as.vector(rst[[2]])
+  dim(tmp) <- c(m, m)
+  return(tmp)
+}
+
+mtrx_Linf <- function(a)
+{
+  if(!is.loaded("matrix_Linf_distance")) {
+    dyn.load("mtrx.so")
+  }
+  tmp_a = t(a)
+  n <- nrow(a)
+  m <- ncol(a)
+  c <- vector(length = m * m)
+  rst <- .C("matrix_Linf_distance",
+            as.double(tmp_a),
+            as.double(c),
+            as.integer(n),
+            as.integer(m))
+  tmp <- as.vector(rst[[2]])
+  dim(tmp) <- c(m, m)
+  return(tmp)
+}
+
+mtrx_Kendall <- function(a)
 {
   if(!is.loaded("matrix_Kendall_distance")) {
     dyn.load("mtrx.so")
   }
+  tmp_a = t(a)
   n <- nrow(a)
   m <- ncol(a)
-  if (filename == ""){
-    result <- .C("matrix_Kendall_distance",
-            data = as.double(a),
-            dist_matrix = double(m*m),
-            rows = as.integer(n),
-            cols = as.integer(m))$dist_matrix
-    dim(result) <- c(m, m)
-    colnames(result) <- colnames(a)
-    rownames(result) <- colnames(a)
-    return(result)
-  }
-  else{
-  RESULTFILE <- file(paste(filename,"kdm",sep="."), "wb")
-  writeBin(as.integer(m), RESULTFILE, size = 4)
-  if (length(colnames(a)) != 0){
-    writeBin(colnames(a), RESULTFILE)
-  }
-  else{
-    writeBin(as.character(c(1:m)), RESULTFILE)
-  }
-  close(RESULTFILE)
-  result <- .C("file_Kendall_distance",
-          data = as.double(a),
-          rows = as.integer(n),
-          cols = as.integer(m),
-          fout = as.character(paste(filename,"kdm",sep=".")))
-  }
+  c <- vector(length = m * m)
+  rst <- .C("matrix_Kendall_distance",
+            as.double(tmp_a),
+            as.double(c),
+            as.integer(n),
+            as.integer(m))
+  tmp <- as.vector(rst[[2]])
+  dim(tmp) <- c(m, m)
+  return(tmp)
 }
 
-
-mtrx_read_kdm <- function(filename){
-  MATRIXFILE <- file(filename, "rb")
-  m <- readBin(MATRIXFILE, integer(), n = 1, size = 4)
-  print(m)
-  names <- readBin(MATRIXFILE, character(), m)
-  print(names)
-  data <- matrix(c(0), ncol = m, nrow = m)
-  for (i in 1:(m-1)){
-    datasample <- readBin(MATRIXFILE, numeric(), n = m-i, size = 8)
-    print(datasample)
-    data[i,(i+1):m] <- datasample
-    data[(i+1):m,i] <- datasample
+mtrx_Kendall_naive <- function(a)
+{
+  if(!is.loaded("matrix_Kendall_distance_naive")) {
+    dyn.load("mtrx.so")
   }
-  close(MATRIXFILE)
-  colnames(data) <- names
-  rownames(data) <- names
-  return(data)
+  tmp_a = t(a)
+  n <- nrow(a)
+  m <- ncol(a)
+  c <- vector(length = m * m)
+  rst <- .C("matrix_Kendall_distance_naive",
+            as.double(tmp_a),
+            as.double(c),
+            as.integer(n),
+            as.integer(m))
+  tmp <- as.vector(rst[[2]])
+  dim(tmp) <- c(m, m)
+  return(tmp)
 }
