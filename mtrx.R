@@ -1,20 +1,69 @@
+library(float)
+
+
+process_batch <- function(count_matrix, first_index, second_index, batch_size) {
+    if (first_index == second_index) {
+        fn_name <- "matrix_Kendall_distance_same_block"
+    } else {
+        fn_name <- "matrix_Kendall_distance_different_blocks"
+    }
+
+    first_right_border <- min(first_index + batch_size, ncol(count_matrix))
+    second_right_border <- min(second_index + batch_size, ncol(count_matrix))
+
+    first_start <- first_index + 1
+    second_start <- second_index + 1
+    count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
+    count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
+
+    batch_a_size <- first_right_border - first_index
+    batch_b_size <- second_right_border - second_index
+    result <- .C(
+        fn_name,
+        matrix_a = as.double(count_submatrix_a),
+        matrix_b = as.double(count_submatrix_b),
+        dist_matrix = double(batch_a_size * batch_b_size),
+        rows = as.integer(nrow(count_matrix)),
+        cols_a = as.integer(batch_a_size),
+        cols_b = as.integer(batch_b_size)
+    )$dist_matrix
+
+    dim(result) <- c(batch_a_size, batch_b_size)
+
+    return (result)
+}
+
 mtrx_Kendall_distance <- function(a, filename = "")
 {
-  if(!is.loaded("matrix_Kendall_distance")) {
+  if(!is.loaded("matrix_Kendall_distance_same_block")) {
     dyn.load("mtrx.so")
   }
   n <- nrow(a)
   m <- ncol(a)
+
+
+  result_overall <- double(m * m)
+  dim(result_overall) <- c(m, m)
+  
+  colnames(result_overall) = colnames(a)
+  rownames(result_overall) = colnames(a)
+
+  batch_size <- 50
   if (filename == ""){
-    result <- .C("matrix_Kendall_distance",
-            data = as.double(a),
-            dist_matrix = double(m*m),
-            rows = as.integer(n),
-            cols = as.integer(m))$dist_matrix
-    dim(result) <- c(m, m)
-    colnames(result) <- colnames(a)
-    rownames(result) <- colnames(a)
-    return(result)
+    for (first_index in seq(0, m - 1, by=batch_size)) {
+
+        for (second_index in seq(0, m - 1, by=batch_size)) {
+            result_overall[c(1:50), c(1:50)] <- process_batch(
+                count_matrix = a,
+                first_index = first_index,
+                second_index = second_index,
+                batch_size = 50
+            )        
+        }
+    } 
+    
+
+    return (result_overall)
   }
   else{
   RESULTFILE <- file(paste(filename,"kdm",sep="."), "wb")
