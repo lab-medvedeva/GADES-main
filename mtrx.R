@@ -18,6 +18,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size) {
 
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
+
     result <- .C(
         fn_name,
         matrix_a = as.double(count_submatrix_a),
@@ -30,10 +31,16 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size) {
 
     dim(result) <- c(batch_a_size, batch_b_size)
 
-    return (result)
+    return (
+        list(
+            correlation_matrix=result,
+            batch_a_size=batch_a_size,
+            batch_b_size=batch_b_size
+        )
+    )
 }
 
-mtrx_Kendall_distance <- function(a, filename = "")
+mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000)
 {
   if(!is.loaded("matrix_Kendall_distance_same_block")) {
     dyn.load("mtrx.so")
@@ -48,17 +55,24 @@ mtrx_Kendall_distance <- function(a, filename = "")
   colnames(result_overall) = colnames(a)
   rownames(result_overall) = colnames(a)
 
-  batch_size <- 50
   if (filename == ""){
     for (first_index in seq(0, m - 1, by=batch_size)) {
 
         for (second_index in seq(0, m - 1, by=batch_size)) {
-            result_overall[c(1:50), c(1:50)] <- process_batch(
+            result <- process_batch(
                 count_matrix = a,
                 first_index = first_index,
                 second_index = second_index,
-                batch_size = 50
-            )        
+                batch_size = batch_size
+            )
+            a_left = first_index + 1
+            a_right = first_index + result$batch_a_size
+            b_left = second_index + 1
+            b_right = second_index + result$batch_b_size
+            
+            correlation_matrix <- result$correlation_matrix
+            result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
+            
         }
     } 
     

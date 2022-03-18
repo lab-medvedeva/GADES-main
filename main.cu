@@ -17,14 +17,12 @@ __global__ void Rkendall_gpu_atomic(const double* col1, const double* col2, cons
 
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
-  std::cout << std::endl;
   size_t dataset_column_size = *n * sizeof(double);
   size_t reverse_max_size = sizeof(unsigned long long);
   for (int col1 = 0; col1 < *m; col1++){
     double* first_column_device_ptr;
     cudaMalloc(&first_column_device_ptr, dataset_column_size);
     cudaMemcpy(first_column_device_ptr, a + col1 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-    std::cout << col1 << std::endl;
     for (int col2 = col1 + 1; col2 < *m; col2 ++){
       double* second_column_device_ptr;
       // std::cout << col1 << " " << col2 << std::endl;
@@ -56,17 +54,16 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
 
 extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, double* c, int* n, int* m, int* m_b){
 
-  std::cout << std::endl;
   size_t dataset_column_size = *n * sizeof(double);
   size_t reverse_max_size = sizeof(unsigned long long);
   for (int col1 = 0; col1 < *m; col1++){
     double* first_column_device_ptr;
     cudaMalloc(&first_column_device_ptr, dataset_column_size);
     cudaMemcpy(first_column_device_ptr, a + col1 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-    std::cout << col1 << std::endl;
+    // std::cout << col1 << std::endl;
     for (int col2 = 0; col2 < *m_b; col2 ++){
       double* second_column_device_ptr;
-      // std::cout << col1 << " " << col2 << std::endl;
+      
       cudaMalloc(&second_column_device_ptr, dataset_column_size);
       cudaMemcpy(second_column_device_ptr, b + col2 * *n, dataset_column_size, cudaMemcpyHostToDevice);
       unsigned long long host_R = 0;
@@ -83,7 +80,7 @@ extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, d
       Rkendall_gpu_atomic<<<BLOCKS, THREADS>>>(first_column_device_ptr, second_column_device_ptr, *n, *m, device_R);
 
       cudaMemcpy(&host_R, device_R, reverse_max_size, cudaMemcpyDeviceToHost);
-      c[col1 * *m + col2] = host_R * 2.0f / *n / (*n - 1);
+      c[col2 * *m + col1] = host_R * 2.0f / *n / (*n - 1);
       // c[col2 * *m + col1] = c[col1 * *m + col2];
 
       cudaFree(second_column_device_ptr);
