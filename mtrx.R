@@ -1,5 +1,3 @@
-library(float)
-
 
 process_batch <- function(count_matrix, first_index, second_index, batch_size) {
     if (first_index == second_index) {
