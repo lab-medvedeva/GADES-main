@@ -1,11 +1,15 @@
 
-process_batch <- function(count_matrix, first_index, second_index, batch_size) {
+process_batch <- function(count_matrix, first_index, second_index, batch_size, metric) {
     if (first_index == second_index) {
-        fn_name <- "matrix_Kendall_distance_same_block"
+        if (metric == 'kendall') {
+            fn_name <- "matrix_Kendall_distance_same_block"
+        } else {
+            fn_name <- "matrix_Euclidean_distance_same_block"
+        }
     } else {
         fn_name <- "matrix_Kendall_distance_different_blocks"
     }
-
+    print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
@@ -38,7 +42,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size) {
     )
 }
 
-mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000)
+mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall")
 {
   if(!is.loaded("matrix_Kendall_distance_same_block")) {
     dyn.load("mtrx.so")
@@ -61,7 +65,8 @@ mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000)
                 count_matrix = a,
                 first_index = first_index,
                 second_index = second_index,
-                batch_size = batch_size
+                batch_size = batch_size,
+                metric = metric
             )
             a_left = first_index + 1
             a_right = first_index + result$batch_a_size

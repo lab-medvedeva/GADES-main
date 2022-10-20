@@ -43,6 +43,26 @@ __global__ void Rkendall_gpu_atomic_float(float* array, const int n, const int m
   }
 }
 
+__global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int m, unsigned int* result) {
+  
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+
+  for (int col1_num = 0; col1_num < m; ++col1_num) {
+      for (int col2_num = col1_num + 1; col2_num < m; ++col2_num) {
+          float* col1 = array + n * col1_num;
+          float* col2 = array + n * col2_num;
+
+          if (row < n) {
+            float diff = col1[row] - col2[row];
+            diff = diff * diff;
+            atomicAdd(result + col1_num * m + col2_num, diff);
+            atomicAdd(result + col2_num * m + col1_num, diff);
+
+          }
+      }
+  }
+}
 
 __global__ void Rkendall_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result) {
   
@@ -106,6 +126,49 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   cudaFree(d_result);
   cudaFree(d_array);
 }
+
+
+extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
+
+
+  int array_size = *n * *m;
+
+  float* array_new = new float[*n * *m];
+
+  for (int i = 0; i < array_size; ++i) {
+    array_new[i] = a[i];
+  }
+
+  float* d_array;
+
+  cudaMalloc(&d_array, array_size * sizeof(float));
+
+  cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  int threads = 256;
+  int blocks_in_row = (*n + threads - 1) / threads;
+  int blocks_in_col = *n;
+
+
+  unsigned int* d_result;
+  unsigned int* h_result = new unsigned int[(*m) * (*m)];
+  cudaMalloc(&d_result, (*m) * (*m) * sizeof(unsigned int));
+  cudaMemset(d_result, 0, (*m) * (*m) * sizeof(unsigned int));
+
+  Reuclidean_gpu_atomic_float<<<blocks_in_row, threads>>>(d_array, *n, *m, d_result);
+
+  cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+
+
+  for (int i = 0; i < (*m) * (*m); ++i) {
+    c[i] = sqrtf(h_result[i]);
+  }
+
+  free(h_result);
+  cudaFree(d_result);
+  cudaFree(d_array);
+}
+
 
 extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, double* c, int* n, int* m, int* m_b){
 

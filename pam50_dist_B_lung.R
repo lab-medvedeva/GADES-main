@@ -18,7 +18,7 @@ signature_file <- args[4]
 save_to <- args[5]
 save_metrics <- args[6]
 num_samples <- strtoi(args[7])
-
+column_name <- args[8]
 signature <- read.csv(signature_file)$gene
 
 print(signature)
@@ -41,7 +41,7 @@ print("ENSEMBL PAM50 Signature")
 
 anno_raw = read.table(annotationFile, header=TRUE, sep=",")
 
-anno = data.frame(anno_raw$cluster, row.names = anno_raw$cell)
+anno = data.frame(anno_raw[[column_name]], row.names = anno_raw$cell)
 #anno = data.frame(anno_raw$tissue, row.names = anno_raw$cell_id)
 
 colnames(anno) <- "group"
@@ -133,6 +133,6 @@ pdf(file = save_to, width = 8, height = 8)
 hist(randomScores[1:num_samples - 1], breaks=seq(0.3,1.1,l=40), main=glue('H-score for markers: p-val {pval}'), xlab='H-score')
 abline(v=score, col="blue")
 
-text(x = score + 0.1, y = num_samples / 4, label = glue("H-score: {round(score, 3)}"), srt = 90)
+text(x = score + 0.1, y = num_samples / 10, label = glue("H-score: {round(score, 3)}"), srt = 90)
 
 dev.off()
