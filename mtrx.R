@@ -4,7 +4,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
         if (metric == 'kendall') {
             fn_name <- "matrix_Kendall_distance_same_block"
         } else {
-            fn_name <- "matrix_Euclidean_distance_same_block"
+            fn_name <- "matrix_Euclidean_distance_same_block_cpu"
         }
     } else {
         fn_name <- "matrix_Kendall_distance_different_blocks"
