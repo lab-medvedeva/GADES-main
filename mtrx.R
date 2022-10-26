@@ -45,7 +45,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
 mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall")
 {
   if(!is.loaded("matrix_Kendall_distance_same_block")) {
-    dyn.load("mtrx.so")
+    #dyn.load("mtrx.so")
   }
   n <- nrow(a)
   m <- ncol(a)

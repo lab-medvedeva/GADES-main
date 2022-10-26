@@ -1,4 +1,7 @@
 //=============================
+#include <iostream>
+#include <fstream>
+#include <R.h>
 #include<stdio.h>
 #include <cstring>
 #include<math.h>
