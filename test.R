@@ -1,12 +1,12 @@
-#dyn.load("mtrx.so")
+dyn.load("mtrx.so")
 dyn.load("mtrx_cpu.so")
 source("mtrx.R")
 library(amap)
-#library(edgeR)
-#library(biomaRt)
+library(edgeR)
+library(biomaRt)
 library(Hobotnica)
 library(MASS)
-#library("factoextra")
+library("factoextra")
 
 args = commandArgs(trailingOnly=TRUE)
 datain = args[1]
