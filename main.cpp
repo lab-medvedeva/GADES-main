@@ -106,7 +106,7 @@ extern "C" void matrix_Euclidean_distance_different_block_cpu(double* a, double*
 }
 
 
-extern "C" void  matrix_Kendrall_distance_different_block_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
+extern "C" void  matrix_Kendall_distance_different_block_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
   int array_size = * n * * m;
   float * array_new = new float[ * n * * m];
   for (int i = 0; i < array_size; ++i) {
