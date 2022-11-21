@@ -84,6 +84,28 @@ __global__ void Rkendall_gpu_atomic_float_different_blocks(float* array, float* 
   }
 }
 
+__global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result) {
+  
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+
+  for (int col1_num = 0; col1_num < m; ++col1_num) {
+      for (int col2_num = 0; col2_num < m_b; ++col2_num) {
+          float* col1 = array + n * col1_num;
+          float* col2 = array2 + n * col2_num;
+
+          if (row < n) {
+            float diff = col1[row] - col2[row];
+            diff = diff * diff;
+            //atomicAdd(result + col1_num * m + col2_num, diff);
+            atomicAdd(result + col2_num * m + col1_num, diff);
+
+          }
+      }
+  }
+}
+
+
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
 
@@ -222,6 +244,55 @@ extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, d
   cudaFree(d_array2);
 }
 
+
+extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b, double* c, int* n, int* m, int* m_b){
+
+  int array_size = *n * *m;
+  float* array_new = new float[*n * *m];
+
+  for (int i = 0; i < array_size; ++i) {
+    array_new[i] = a[i];
+  }
+
+  int array2_size = *n * (*m_b);
+  float* array2_new = new float[array2_size];
+
+  for (int i = 0; i < array2_size; ++i) {
+    array2_new[i] = b[i];
+  }
+
+  float* d_array;
+  float* d_array2;
+
+  cudaMalloc(&d_array, array_size * sizeof(float));
+  cudaMalloc(&d_array2, array_size * sizeof(float));
+
+  cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  int threads = 256;
+  int blocks_in_row = (*n + threads - 1) / threads;
+  int blocks_in_col = *n ;
+
+  unsigned int* d_result;
+  unsigned int* h_result = new unsigned int[(*m) * (*m_b)];
+  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(unsigned int));
+  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(unsigned int));
+
+  Reuclidean_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array, d_array2, *n, *m, *m_b, d_result);
+
+  cudaMemcpy(h_result, d_result, (*m) * (*m_b) * sizeof(float), cudaMemcpyDeviceToHost);
+
+
+  for (int i = 0; i < (*m) * (*m_b); ++i) {
+    c[i] = sqrtf(h_result[i]);
+  }
+
+  free(h_result);
+  cudaFree(d_result);
+  cudaFree(d_array);
+  cudaFree(d_array2);
+}
 
 extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){
   std::ofstream RESULTFILE(*fout, std::ios::binary|std::ios::app);
