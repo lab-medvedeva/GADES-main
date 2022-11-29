@@ -140,7 +140,6 @@ extern "C" void matrix_Euclidean_distance_different_block_cpu(double* a, double*
   free(d_array2);
 }
 
-
 extern "C" void  matrix_Kendall_distance_different_block_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
   int array_size = * n * * m;
   float * array_new = new float[ * n * * m];
@@ -183,6 +182,63 @@ extern "C" void  matrix_Kendall_distance_different_block_cpu(double* a, double* 
 
   for (int i = 0; i < ( * m) * ( * m); ++i) {
     c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
+  }
+  free(h_result);
+  free(d_array);
+  free(d_array2);
+}
+
+extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
+  int array_size = * n * * m;
+  float * array_new = new float[ * n * * m];
+  for (int i = 0; i < array_size; ++i) {
+    array_new[i] = a[i];
+  }
+
+  int array_size2 = * n * (*m_b);
+  float * array2_new = new float[array_size2];
+  for (int i = 0; i < array_size2; ++i) {
+    array2_new[i] = b[i];
+  }
+  float epsilon=0.01;
+  float * d_array = new float[array_size];
+  float *d_array2 = new float[array_size];
+
+  std::memcpy(d_array, array_new, array_size * sizeof(float));
+  std::memcpy(d_array2, array2_new, array_size * sizeof(float));
+
+  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
+  unsigned int * h_result = new unsigned int[( * m) * ( * m_b)];
+  std::memset(h_result, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
+
+  //CPU Implementation
+  for (int row = 0; row < * n; row++) {
+    //Reuclidean_cpu_atomic_float(i,d_array, *n, *m, d_result);
+    for (int col1_num = 0; col1_num < * m; ++col1_num) {
+      for (int col2_num = 0; col2_num < * m_b; ++col2_num) {
+        float * col1 = d_array + * n * col1_num;
+        float * col2 = d_array + * n * col2_num;
+        if (row < *m ) {
+          if(col2[row]==0.0){
+          
+            float diff = col1[row] - col2[row];
+            diff = diff * diff;
+            diff = diff/epsilon;
+            
+            h_result[col2_num * * m + col1_num] += diff;
+          } else {
+            float diff = col1[row] - col2[row];
+            diff = diff * diff;
+            diff = diff/col2[row];
+            //atomicAdd(result + col1_num * m + col2_num, diff);
+            h_result[col2_num * * m + col1_num] += diff;
+          }
+        }
+      }
+    }
+  }
+  for (int i = 0; i < ( * m) * ( * m); ++i) {
+    c[i] =  h_result[i] * 2.0f / (*n) / (*n - 1);
   }
   free(h_result);
   free(d_array);

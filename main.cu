@@ -164,39 +164,6 @@ __global__ void  Rpearson_gpu_atomic_float_different_blocks(float *gA, float *gB
   corrcoef = (ncol*sum_ab - sum_a*sum_b)/sqrtf((ncol*sum_a2-sum_a*sum_a)*(ncol*sum_b2-sum_b*sum_b));
   gC[i*nrow+j] = corrcoef;
 }
-
-
-
-__global__ void Rpearson_gpu_atomic_float_different_blocks(float *gA, float *gB,const int nrow,const int ncol,const int m_b,float* result){
-  int i,j,k;
-  i = blockIdx.y * blockDim.y + threadIdx.y;
-  j = blockIdx.x* blockDim.x + threadIdx.x;
-
-  __shared__ float sA[nrow][nrow];
-  __shared__ float sB[nrow][nrow];
-  int offset;
-  float a,b;
-  float sum_a, sum_b, sum_a2, sum_b2, sum_ab, corrcoef;
-  sum_a = sum_a2 = sum_b = sum_b2 = sum_ab = 0;
-	for (offset=0; offset < ncol; offset += blockDim.x){
-		sA[threadIdx.y][threadIdx.x] = gA[(blockIdx.y*blockDim.y +threadIdx.y)*ncol+offset+threadIdx.x];
-		sB[threadIdx.y][threadIdx.x] = gB[(blockIdx.x*blockDim.x +threadIdx.y)*ncol+offset+threadIdx.x];
-		__syncthreads() ;
-		for (k=0; k < blockDim.x; k++){
-			a = sA[threadIdx.y][k];
-			b = sB[threadIdx.x][k];
-			sum_a += a;
-			sum_a2 += a*a;
-			sum_b += b;
-			sum_b2 += b*b;
-			sum_ab += a*b;
-		}
-		__syncthreads() ;
-	}
-	corrcoef = (ncol*sum_ab - sum_a*sum_b)/
-			sqrtf((ncol*sum_a2-sum_a*sum_a)*(ncol*sum_b2-sum_b*sum_b));
-	result[i*nrow+j] = corrcoef; 
-}
 */
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
