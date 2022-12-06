@@ -2,11 +2,23 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     if (first_index == second_index) {
         if (metric == 'kendall') {
             fn_name <- "matrix_Kendall_distance_same_block"
-        } else {
+        } else if(metric =='euclidean') {
             fn_name <- "matrix_Euclidean_distance_same_block"
-        }
+        } else if(metric =='pearson') {
+            fn_name <- "matrix_Pearson_distance_different_blocks" #for not different block
+        } else {
+	    fn_name <- "matrix_Kendall_distance_same_block"
+	}
     } else {
-        fn_name <- "matrix_Kendall_distance_different_blocks"
+        if (metric == 'kendall') {
+            fn_name <- "matrix_Kendall_distance_different_blocks"
+        } else if(metric =='euclidean') {
+            fn_name <- "matrix_Euclidean_distance_different_blocks"
+        } else if(metric =='pearson') {
+            fn_name <- "matrix_Pearson_distance_different_blocks"
+        } else {
+	    fn_name <-"matrix_kendall_distance_different_blocks"
+	}
     }
     print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
@@ -44,11 +56,25 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
     if (first_index == second_index) {
         if (metric == 'kendall') {
             fn_name <- "matrix_Kendall_distance_same_block_cpu"
-        } else {
+        } else if(metric =='euclidean') {
             fn_name <- "matrix_Euclidean_distance_same_block_cpu"
-        }
+        } else if(metric =='pearson') {
+            fn_name <- "matrix_Pearson_distance_different_blocks_cpu" #For not different block
+        } else {
+	    fn_name <- "matrix_Kendall_distance_same_block_cpu"
+	}
     } else {
-        fn_name <- "matrix_Kendall_distance_different_blocks"
+        if (metric == 'kendall') {
+            fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
+        } else if(metric =='euclidean') {
+            fn_name <- "matrix_Euclidean_distance_different_blocks_cpu"
+        } else if(metric =='pearson') {
+            fn_name <- "matrix_Pearson_distance_different_blocks_cpu"
+        }
+        else {
+	    fn_name <-"matrix_kendall_distance_different_blocks_cpu"
+	}
+       #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
     print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
@@ -84,7 +110,7 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 }
 
 
-mtrx_Kendall_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu")
+mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu")
 {
   if(!is.loaded("matrix_Kendall_distance_same_block")) {
     #dyn.load("mtrx.so")
