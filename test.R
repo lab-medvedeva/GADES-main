@@ -27,11 +27,11 @@ for (i in 1:times) {
 
     if (method == 'GPU') {
         print(metric)
-        distMatrix_mtrx <- mtrx_Kendall_distance(data, batch_size = 10000, metric = metric,type="gpu")
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 10000, metric = metric,type="gpu")
         print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         print(metric)
-        distMatrix_mtrx <- mtrx_Kendall_distance(data, batch_size = 10000, metric = metric,type="cpu")
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 10000, metric = metric,type="cpu")
         print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
