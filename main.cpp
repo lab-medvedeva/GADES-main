@@ -210,7 +210,44 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   unsigned int * h_result = new unsigned int[( * m) * ( * m_b)];
   std::memset(h_result, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
-
+ 
+ 
+  float dist,num=0,sum1=0,sum2=0; 
+  float sumx=0,sumy=0,sumxx=0,sumyy=0,sumxy=0,denum2=0,count=0;
+  for (int row=0;row<*n;row++){
+    for (int col1_num = 0; col1_num < * m; ++col1_num) {
+      for (int col2_num = 0; col2_num < * m_b; ++col2_num) {
+        float * col1 = d_array + * n * col1_num;
+        float * col2 = d_array + * n * col2_num;
+        if (row < *n ) {    
+	    sumxy = (col1[row] * col2[row]);
+      	    sumx = col1[row];
+      	    sumy = col2[row];
+            sumxx = col1[row] *col1[row];
+            sumyy = col1[row] * col2[row];
+	    num = sumxy - ( sumx*sumy /count );
+	    denum2 =  (sumxx - (sumx*sumx /count ) )* (sumyy - (sumy*sumy /count ) ) ;
+	    //if(col2_num<2){std::cout<<"("<<num<<denum2<<")";std::cout<<"\n";}
+  //num += col1[row] * col2[row];
+//	    sum1 += col1[row] * col1[row];
+//	    sum2 += col2[row] * col2[row];
+	   dist = (num/sqrt(sum1*sum2));
+            //std::cout << "("<<dist<<")";
+    if(col2_num<2){std::cout<<"("<<num<<","<<denum2<<","<<(1-num/sqrt(denum2))<<")";std::cout<<"\n";}
+ 	if(denum2 <=0) {
+      		h_result[col2_num* *m + col1_num]+=0;
+    	} else{
+	    h_result[col2_num * * m + col1_num] += (1-num/sqrt(denum2));
+	}
+	    count++;
+	}
+      }
+    }      
+   }
+ for (int i = 0; i < ( * m) * ( * m); ++i) {
+    c[i] =  h_result[i];
+  }
+/*  
   //CPU Implementation
   for (int row = 0; row < * n; row++) {
     //Reuclidean_cpu_atomic_float(i,d_array, *n, *m, d_result);
@@ -239,7 +276,7 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
   }
   for (int i = 0; i < ( * m) * ( * m); ++i) {
     c[i] =  h_result[i] * 2.0f / (*n) / (*n - 1);
-  }
+  }*/
   free(h_result);
   free(d_array);
   free(d_array2);

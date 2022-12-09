@@ -104,7 +104,31 @@ __global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float
       }
   }
 }
-
+__global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
+	int row = blockIdx.x*blockDim.x +threadIdx.x;
+	float num = 0;
+	float sum1 = 0;
+	float sum2 = 0;
+	float epsilon=0.001;
+	for (int col1_num=0;col1_num<m;++col1_num){
+		for(int col2_num=0;col2_num<m_b;++col2_num){
+			float* col1 = array + n * col1_num;
+			float* col2 = array2 + n * col2_num;
+			if(row<m) {
+				if(col2[row]==0.0 || col1[row]==0.0) {
+					atomicAdd(result+col2_num*m+col1_num,1);
+				} else {
+					num = (col1[row] * col2[row]);
+					sum1 = (col1[row] *col1[row]);
+					sum2 = (col2[row] * col2[row]);
+					
+					float dist = 1 -(num/ sqrt(sum1*sum2));
+					atomicAdd(result+col2_num*m+col1_num,dist);
+				}
+			}
+		}
+	}
+} 
 __global__ void Rpearson_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
   //int i,j,k;
   //int row1 = blockIdx.y * blockDim.y + threadIdx.y;
@@ -389,7 +413,7 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(unsigned int));
   cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(unsigned int));
 
-  Rpearson_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array,d_array2, *n, *m,*m_b, d_result);
+  RpearsonCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array,d_array2, *n, *m,*m_b, d_result);
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
 
  for (int i = 0; i < (*m) * (*m_b); ++i) {
