@@ -5,7 +5,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
         } else if(metric =='euclidean') {
             fn_name <- "matrix_Euclidean_distance_same_block"
         } else if(metric =='pearson') {
-            fn_name <- "matrix_Pearson_distance_different_blocks" #for not different block
+            fn_name <- "matrix_Pearson_distance_same_block" #for not different block
         } else {
 	    fn_name <- "matrix_Kendall_distance_same_block"
 	}

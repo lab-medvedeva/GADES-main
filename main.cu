@@ -103,6 +103,37 @@ __global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float
       }
   }
 }
+
+__global__ void RpearsonCorr_gpu_atomic_float_same_block(
+  float* array,
+  const int n, const int m,
+  float* scalar_product,
+  float* x_norm,
+  float* y_norm
+) {
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  for (int col1_num = 0; col1_num < m; ++col1_num) {
+      for (int col2_num = col1_num; col2_num < m; ++col2_num) {
+          float* col1 = array + n * col1_num;
+          float* col2 = array + n * col2_num;
+
+          if (row < n) {
+            float diff = col1[row] * col2[row];
+            atomicAdd(scalar_product + col1_num * m + col2_num, diff);
+            atomicAdd(scalar_product + col2_num * m + col1_num, diff);
+
+            float x_element_norm = col1[row] * col1[row];
+            float y_element_norm = col2[row] * col2[row];
+
+            atomicAdd(x_norm + col1_num * m + col2_num, x_element_norm);
+            atomicAdd(x_norm + col2_num * m + col1_num, x_element_norm);
+            atomicAdd(y_norm + col1_num * m + col2_num, y_element_norm);
+            atomicAdd(y_norm + col2_num * m + col1_num, y_element_norm);
+          }
+      }
+  }
+}
 __global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* result ){
 	int row = blockIdx.y*blockDim.y +threadIdx.y;
 	int row2 = blockIdx.x*blockDim.x +threadIdx.x;
@@ -387,6 +418,82 @@ extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b,
   cudaFree(d_result);
   cudaFree(d_array);
   cudaFree(d_array2);
+}
+
+extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
+  int array_size = *n * *m;
+  float* array_new = new float[*n * *m];
+
+  for (int i = 0; i < array_size; ++i) {
+    array_new[i] = a[i];
+  }
+
+  // int array2_size = *n * (*m_b);
+  // float* array2_new = new float[array2_size];
+
+  // for (int i = 0; i < array2_size; ++i) {
+  //   array2_new[i] = b[i];
+  // }
+
+  float* d_array;
+  // float* d_array2;
+
+  cudaMalloc(&d_array, array_size * sizeof(float));
+  // cudaMalloc(&d_array2, array_size * sizeof(float));
+
+  cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
+  // cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  int threads = 256;
+  int blocks = (*n + threads - 1) / threads;
+  // int blocks_in_col = (*n + threads - 1) / threads;
+
+
+  float* d_result;
+  float* h_result = new float[(*m) * (*m)];
+
+  cudaMalloc(&d_result, (*m) * (*m) * sizeof(float)); 
+  cudaMemset(d_result, 0, (*m) * (*m) * sizeof(float));
+
+  float* d_x_norm_result;
+  float* h_x_norm_result = new float[(*m) * (*m)];
+
+  cudaMalloc(&d_x_norm_result, (*m) * (*m) * sizeof(float)); 
+  cudaMemset(d_x_norm_result, 0, (*m) * (*m) * sizeof(float));
+
+  float* d_y_norm_result;
+  float* h_y_norm_result = new float[(*m) * (*m)];
+
+  cudaMalloc(&d_y_norm_result, (*m) * (*m) * sizeof(float)); 
+  cudaMemset(d_y_norm_result, 0, (*m) * (*m) * sizeof(float));
+
+  RpearsonCorr_gpu_atomic_float_same_block<<<blocks, threads>>>(
+    d_array,
+    *n, *m,
+    d_result,
+    d_x_norm_result,
+    d_y_norm_result
+  );
+  cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_x_norm_result, d_x_norm_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_y_norm_result, d_y_norm_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+
+  for (int i = 0; i < (*m) * (*m); ++i) {
+    // printf("%4.2f ",h_result[i]);
+    if(!isnan(h_result[i])){
+      if (i == 1 || i == (*m)) {
+        printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
+      }
+      c[i] = 1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
+    }
+  }
+
+  free(h_result);
+  cudaFree(d_result);
+  cudaFree(d_x_norm_result);
+  cudaFree(d_y_norm_result);
+  cudaFree(d_array);
+  // cudaFree(d_array2);
 }
 
 extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
