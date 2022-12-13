@@ -47,7 +47,6 @@ __global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int
   
   int row = blockIdx.x * blockDim.x + threadIdx.x;
 
-
   for (int col1_num = 0; col1_num < m; ++col1_num) {
       for (int col2_num = col1_num + 1; col2_num < m; ++col2_num) {
           float* col1 = array + n * col1_num;
@@ -104,26 +103,30 @@ __global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float
       }
   }
 }
-__global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
-	int row = blockIdx.x*blockDim.x +threadIdx.x;
+__global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* result ){
+	int row = blockIdx.y*blockDim.y +threadIdx.y;
+	int row2 = blockIdx.x*blockDim.x +threadIdx.x;
+	float epsilon=0.01;
+	for (int col1_num=0;col1_num<m;++col1_num){
 	float num = 0;
 	float sum1 = 0;
 	float sum2 = 0;
-	float epsilon=0.001;
-	for (int col1_num=0;col1_num<m;++col1_num){
-		for(int col2_num=0;col2_num<m_b;++col2_num){
+	float dist = 0;
+	for(int col2_num=0;col2_num<m_b;++col2_num){
 			float* col1 = array + n * col1_num;
 			float* col2 = array2 + n * col2_num;
-			if(row<m) {
+			if(row<n && row<row2) {
 				if(col2[row]==0.0 || col1[row]==0.0) {
-					atomicAdd(result+col2_num*m+col1_num,1);
+					atomicAdd(result+col2_num*m+col1_num,1-(num/sqrt(sum1*sum2)));
 				} else {
-					num = (col1[row] * col2[row]);
-					sum1 = (col1[row] *col1[row]);
+					num = (col1[row2] * col2[row]);
+
+					sum1 = (col1[row2] *col1[row2]);
 					sum2 = (col2[row] * col2[row]);
-					
-					float dist = 1 -(num/ sqrt(sum1*sum2));
-					atomicAdd(result+col2_num*m+col1_num,dist);
+					dist = 1-(num/ sqrt(sum1+sum2));
+					if(dist==1){}
+					atomicAdd(result+col2_num*m+col1_num,dist+epsilon);
+					if(threadIdx.x==0){printf("val1=%4.2f, val2=%4.2f, num=%4.2f, sum1=%4.2f, sum2=%4.2f, res=%4.2f  \n", col1[row],col2[row],num,sum1,sum2,dist);}
 				}
 			}
 		}
@@ -133,7 +136,7 @@ __global__ void Rpearson_gpu_atomic_float_different_blocks(float* array, float* 
   //int i,j,k;
   //int row1 = blockIdx.y * blockDim.y + threadIdx.y;
 	//int row2 = blockIdx.x* blockDim.x + threadIdx.x;
-	float epsilon = 0.01;
+  float epsilon = 0.01;
   int row = blockIdx.x * blockDim.x + threadIdx.x;
 
 
@@ -160,11 +163,11 @@ __global__ void Rpearson_gpu_atomic_float_different_blocks(float* array, float* 
     }
   }
 }
-/*
-__global__ void  Rpearson_gpu_atomic_float_different_blocks(float *gA, float *gB, int nrow, int ncol,float *gC) {
+
+__global__ void  RpearsonCorr2_gpu_atomic_float_different_blocks(float *gA, float *gB, const int nrow,const int ncol, const int m_b, float*gC) {
   __shared__ float sA[16][16];
   __shared__ float sB[16][16];
-  int i,j,k;
+  int i,j,k; float epsilon=0.001;
   int offset;  float a,b;
   float sum_a, sum_b, sum_a2, sum_b2, sum_ab, corrcoef;
   i = blockIdx.y*blockDim.y + threadIdx.y;
@@ -175,9 +178,10 @@ __global__ void  Rpearson_gpu_atomic_float_different_blocks(float *gA, float *gB
      sB[threadIdx.y][threadIdx.x] = gB[(blockIdx.x*blockDim.x + threadIdx.y)*ncol+offset+threadIdx.x];
      __syncthreads();
      for (k=0; k < blockDim.x; k++) {
-        a = sA[threadIdx.y][k];
+ 	a = sA[threadIdx.y][k];
         b = sB[threadIdx.x][k];
-        sum_a += a;
+        printf("val1=%4.2f,k=%d , thread=%d,block=%d \n",sA[threadIdx.y][k],k,threadIdx.y,blockDim.x);
+       	sum_a += a;
         sum_a2 += a*a;
         sum_b += b;
         sum_b2 += b*b;
@@ -185,12 +189,20 @@ __global__ void  Rpearson_gpu_atomic_float_different_blocks(float *gA, float *gB
      }
      __syncthreads();
   }
-  corrcoef = (ncol*sum_ab - sum_a*sum_b)/sqrtf((ncol*sum_a2-sum_a*sum_a)*(ncol*sum_b2-sum_b*sum_b));
-  gC[i*nrow+j] = corrcoef;
+  corrcoef = (ncol*sum_ab - sum_a*sum_b)/sqrtf((ncol*sum_a2-sum_a*sum_a)*(ncol*sum_b2-sum_b*sum_b)+epsilon);
+  printf("CorrCoeff=%4.2f",corrcoef);
+  //if (corrcoef <0){ gC[i*nrow+j] = 1+corrcoef; 
+ // } else if (corrcoef >=0) {gC[i*nrow+j]=1+corrcoef;
+  //} else {
+  //	gC[i*nrow+j] = null;
+  //}
+  if (corrcoef>0 ){
+   atomicAdd(gC + i * nrow + j, 1- abs(corrcoef));
+  }
 }
-*/
-extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
+
+extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
   int array_size = *n * *m;
 
@@ -401,27 +413,100 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 256;
+  int threads = 16;
   int blocks_in_row = (*n + threads - 1) / threads;
   int blocks_in_col = (*n + threads - 1) / threads;
 
   dim3 THREADS(threads, threads);
   dim3 BLOCKS(blocks_in_row, blocks_in_col);
 
-  unsigned int* d_result;
-  unsigned int* h_result = new unsigned int[(*m) * (*m_b)];
-  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(unsigned int));
-  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(unsigned int));
+  float* d_result;
+  float* h_result = new float[(*m) * (*m_b)];
+
+  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(float)); 
+  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(float));
 
   RpearsonCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array,d_array2, *n, *m,*m_b, d_result);
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
-
  for (int i = 0; i < (*m) * (*m_b); ++i) {
-    c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
+	 printf("%4.2f ",h_result[i]);
+	 if(!isnan(h_result[i])){
+		 c[i] = (h_result[i]);} //* 2.0f / (*n) / (*n - 1);
   }
 
   free(h_result);
   cudaFree(d_result);
+  cudaFree(d_array);
+  cudaFree(d_array2);
+}
+
+extern "C" void matrix_Pearson2_distance_different_blocks(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
+    int array_size = *n * *m;
+  float* array_new = new float[*n * *m];
+
+  for (int i = 0; i < array_size; ++i) {
+    array_new[i] = a[i];
+  }
+
+  int array2_size = *n * (*m_b);
+  float* array2_new = new float[array2_size];
+
+  for (int i = 0; i < array2_size; ++i) {
+    array2_new[i] = b[i];
+  }
+
+  float* d_array;
+  float* d_array2;
+
+  cudaMalloc(&d_array, array_size * sizeof(float));
+  cudaMalloc(&d_array2, array_size * sizeof(float));
+
+  cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
+
+  int threads = 16;
+  int blocks_in_row = (*n + threads - 1) / threads;
+  int blocks_in_col = (*n + threads - 1) / threads;
+
+  dim3 THREADS(threads, threads);
+  dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+//  float* d_result;
+//  float* h_result = new float[(*m) * (*m_b)];
+  float* r1;
+  float* h_r1 = new float[(*m) * (*m_b)];
+ float* r2;
+  float* h_r2 = new float[(*m) * (*m_b)];
+ float* r3;
+  float* h_r3 = new float[(*m) * (*m_b)];
+
+//  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(float)); 
+//  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(float));
+  cudaMalloc(&r1, (*m) * (*m_b) * sizeof(float)); 
+  cudaMemset(r1, 0, (*m) * (*m_b) * sizeof(float));
+  cudaMalloc(&r2, (*m) * (*m_b) * sizeof(float)); 
+  cudaMemset(r2, 0, (*m) * (*m_b) * sizeof(float));
+  cudaMalloc(&r3, (*m) * (*m_b) * sizeof(float)); 
+  cudaMemset(r3, 0, (*m) * (*m_b) * sizeof(float));
+
+  //RpearsonCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array,d_array2, *n, *m,*m_b, r1,r2,r3);
+  cudaMemcpy(h_r1, r1, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_r2, r2, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(h_r3, r3, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  
+ for (int i = 0; i < (*m) * (*m_b); ++i) {
+	 printf("%4.2f ",h_r1[i]/sqrt(h_r2[i]*h_r3[i]));
+	 if(!isnan(h_r1[i])){
+		 c[i] = (h_r1[i]/sqrt(h_r2[i]*h_r3[i]));} //* 2.0f / (*n) / (*n - 1);
+  }
+
+  free(h_r1);
+  free(h_r2);
+  free(h_r3);
+  
+  cudaFree(r1);
+  cudaFree(r2);
+  cudaFree(r3);
   cudaFree(d_array);
   cudaFree(d_array2);
 }
