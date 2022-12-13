@@ -130,40 +130,36 @@ __global__ void RpearsonCorr_gpu_atomic_float_same_block(
             atomicAdd(x_norm + col2_num * m + col1_num, x_element_norm);
             atomicAdd(y_norm + col1_num * m + col2_num, y_element_norm);
             atomicAdd(y_norm + col2_num * m + col1_num, y_element_norm);
+	
           }
       }
   }
 }
-__global__ void RpearsonCorrn_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* result ){
-	int row = blockIdx.y*blockDim.y +threadIdx.y;
-	int row2 = blockIdx.x*blockDim.x +threadIdx.x;
-	float epsilon=0.01;
-	for (int col1_num=0;col1_num<m;++col1_num){
-	float num = 0;
-	float sum1 = 0;
-	float sum2 = 0;
-	float dist = 0;
-	for(int col2_num=0;col2_num<m_b;++col2_num){
-			float* col1 = array + n * col1_num;
-			float* col2 = array2 + n * col2_num;
-			if(row<n && row<row2) {
-				if(col2[row]==0.0 || col1[row]==0.0) {
-					atomicAdd(result+col2_num*m+col1_num,1-(num/sqrt(sum1*sum2)));
-				} else {
-					num = (col1[row2] * col2[row]);
 
-					sum1 = (col1[row2] *col1[row2]);
-					sum2 = (col2[row] * col2[row]);
-					dist = 1-(num/ sqrt(sum1+sum2));
-					if(dist==1){}
-					atomicAdd(result+col2_num*m+col1_num,dist+epsilon);
-					if(threadIdx.x==0){printf("val1=%4.2f, val2=%4.2f, num=%4.2f, sum1=%4.2f, sum2=%4.2f, res=%4.2f  \n", col1[row],col2[row],num,sum1,sum2,dist);}
-				}
+__global__ void RpearsonCorr3_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* r1,float *r2, float* r3 ){
+    int row = blockIdx.x*blockDim.x +threadIdx.x;
+    for (int col1_num=0;col1_num<m;++col1_num){
+	for(int col2_num=0;col2_num<m_b;++col2_num){
+		float* col1 = array + n * col1_num;
+		float* col2 = array2 + n * col2_num;
+		if(row<n) {
+				float num = (col1[row] * col2[row]);
+				float sum1 = (col1[row] * col1[row]);
+				float sum2 = (col2[row] * col2[row]);
+				//if(dist==1){}
+				atomicAdd(r1+col1_num*m_b+col2_num,num);
+				atomicAdd(r2+col1_num*m_b+col2_num,sum1);
+				atomicAdd(r3+col1_num*m_b+col2_num,sum2);
+				atomicAdd(r1+col2_num*m+col1_num,num);
+				atomicAdd(r2+col2_num*m+col1_num,sum1);
+				atomicAdd(r3+col2_num*m+col1_num,sum2);
+				//!debug if(threadIdx.x==0){printf("val1=%4.2f, val2=%4.2f, num=%4.2f, sum1=%4.2f, sum2=%4.2f, \n", col1[row],col2[row],num,sum1,sum2);}
 			}
 		}
 	}
-} 
-__global__ void Rpearson_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
+}
+
+__global__ void RpearsonChi_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
   //int i,j,k;
   //int row1 = blockIdx.y * blockDim.y + threadIdx.y;
 	//int row2 = blockIdx.x* blockDim.x + threadIdx.x;
@@ -194,73 +190,6 @@ __global__ void Rpearson_gpu_atomic_float_different_blocks(float* array, float* 
     }
   }
 }
-
-__global__ void  RpearsonCorr2_gpu_atomic_float_different_blocks(float *gA, float *gB, const int nrow,const int ncol, const int m_b, float*gC) {
-  __shared__ float sA[16][16];
-  __shared__ float sB[16][16];
-  int i,j,k; float epsilon=0.001;
-  int offset;  float a,b;
-  float sum_a, sum_b, sum_a2, sum_b2, sum_ab, corrcoef;
-  i = blockIdx.y*blockDim.y + threadIdx.y;
-  j = blockIdx.x*blockDim.x + threadIdx.x;
-  sum_a = sum_a2 = sum_b = sum_b2 = sum_ab = 0;
-  for (offset=0; offset < ncol; offset += blockDim.x) {
-     sA[threadIdx.y][threadIdx.x] = gA[(blockIdx.y*blockDim.y + threadIdx.y)*ncol+offset+threadIdx.x];
-     sB[threadIdx.y][threadIdx.x] = gB[(blockIdx.x*blockDim.x + threadIdx.y)*ncol+offset+threadIdx.x];
-     __syncthreads();
-     for (k=0; k < blockDim.x; k++) {
- 	a = sA[threadIdx.y][k];
-        b = sB[threadIdx.x][k];
-        printf("val1=%4.2f,k=%d , thread=%d,block=%d \n",sA[threadIdx.y][k],k,threadIdx.y,blockDim.x);
-       	sum_a += a;
-        sum_a2 += a*a;
-        sum_b += b;
-        sum_b2 += b*b;
-        sum_ab += a*b;
-     }
-     __syncthreads();
-  }
-  corrcoef = (ncol*sum_ab - sum_a*sum_b)/sqrtf((ncol*sum_a2-sum_a*sum_a)*(ncol*sum_b2-sum_b*sum_b)+epsilon);
-  printf("CorrCoeff=%4.2f",corrcoef);
-  //if (corrcoef <0){ gC[i*nrow+j] = 1+corrcoef; 
- // } else if (corrcoef >=0) {gC[i*nrow+j]=1+corrcoef;
-  //} else {
-  //	gC[i*nrow+j] = null;
-  //}
-  if (corrcoef>0 ){
-   atomicAdd(gC + i * nrow + j, 1- abs(corrcoef));
-  }
-}
-__global__ void RpearsonCorr3_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* r1,float *r2, float* r3 ){
-	int row = blockIdx.y*blockDim.y +threadIdx.y;
-	int row2 = blockIdx.x*blockDim.x +threadIdx.x;
-	float epsilon=0.01;
-	for (int col1_num=0;col1_num<m;++col1_num){
-		float num=0,sum1=0,sum2=0,avg=0;
-		for(int col2_num=0;col2_num<m_b;++col2_num){
-			float* col1 = array + n * col1_num;
-			float* col2 = array2 + n * col2_num;
-			if(row<n) {
-				//if(col2[row]==0.0 || col1[row]==0.0) {
-				//	atomicAdd(result+col2_num*m+col1_num,1-(num/sqrt(sum1*sum2)));
-				//} else {
-					 
-					num = (col1[row] * col2[row]);
-					sum1 = (col1[row] * col1[row]);
-					sum2 = (col2[row] * col2[row]);
-					//if(dist==1){}
-					atomicAdd(r1+col2_num*m+col1_num,num);
-					atomicAdd(r2+col2_num*m+col1_num,sum1);
-					atomicAdd(r3+col2_num*m+col1_num,sum2);
-					atomicAdd(r1+col1_num*m+col2_num,num);
-					atomicAdd(r2+col1_num*m+col2_num,sum1);
-					atomicAdd(r3+col1_num*m+col2_num,sum2);
-					if(threadIdx.x==0){printf("val1=%4.2f, val2=%4.2f, num=%4.2f, sum1=%4.2f, sum2=%4.2f, \n", col1[row],col2[row],num,sum1,sum2);}
-				}
-			}
-		}
-	}
-
 
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
@@ -635,11 +564,22 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   cudaMemcpy(h_r2, r2, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
   cudaMemcpy(h_r3, r3, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
   
- for (int i = 0; i < (*m) * (*m_b); ++i) {
-	 printf("%4.2f ",h_r1[i]/sqrt(h_r2[i]*h_r3[i]));
-	 if(!isnan(h_r1[i])){
-		 c[i] = 1-(h_r1[i]/sqrt(h_r2[i])*sqrt(h_r3[i]));} //* 2.0f / (*n) / (*n - 1);
+  int j=0;
+  for (int i = 0; i < (*m) * (*m); ++i) {
+    // printf("%4.2f ",h_result[i]);
+    
+    if(!isnan(h_r1[i])){
+      //if (i == 1 || i == (*m)) {
+      //  printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
+      //}
+      if (i == j * (*m+1)){
+       c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
+       j++;  
+      } else {
+      c[i] = 1.0 - h_r1[i] / sqrtf(h_r2[i]) / sqrtf(h_r2[i]);
+    }}
   }
+
 
   free(h_r1);
   free(h_r2);
