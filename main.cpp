@@ -104,16 +104,16 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(double* a, double* b, do
   std::memcpy(d_array, array_new, array_size * sizeof(float));
 
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r1 = new unsigned int[( * m) * ( * m)];
-  std::memset(h_r1, 0, ( * m) * ( * m) * sizeof(unsigned int));
+  unsigned int * h_scalar = new unsigned int[( * m) * ( * m)];
+  std::memset(h_scalar, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r2 = new unsigned int[( * m) * ( * m)];
-  std::memset(h_r2, 0, ( * m) * ( * m) * sizeof(unsigned int));
+  unsigned int * h_prod1 = new unsigned int[( * m) * ( * m)];
+  std::memset(h_prod1, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r3 = new unsigned int[( * m) * ( * m)];
-  std::memset(h_r3, 0, ( * m) * ( * m) * sizeof(unsigned int));
+  unsigned int * h_prod2 = new unsigned int[( * m) * ( * m)];
+  std::memset(h_prod2, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
 
   for (int row=0;row<*n;row++){
@@ -125,12 +125,12 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(double* a, double* b, do
 	    float num = (col1[row] * col2[row]);
             float sum1 = (col1[row] * col1[row]);
             float sum2 = (col2[row] * col2[row]);
-	    h_r1[col1_num * * m + col2_num] += num;
-            h_r2[col1_num * * m + col2_num] += sum1;
-            h_r3[col1_num * * m + col2_num] += sum2;
-            h_r1[col2_num * * m + col1_num] += num;
-            h_r2[col2_num * * m + col1_num] += sum1;
-            h_r3[col2_num * * m + col1_num] += sum2;
+	    h_scalar[col1_num * * m + col2_num] += num;
+            h_prod1[col1_num * * m + col2_num] += sum1;
+            h_prod2[col1_num * * m + col2_num] += sum2;
+            h_scalar[col2_num * * m + col1_num] += num;
+            h_prod1[col2_num * * m + col1_num] += sum1;
+            h_prod2[col2_num * * m + col1_num] += sum2;
                                   
         }
       }
@@ -141,7 +141,7 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(double* a, double* b, do
   for (int i = 0; i < (*m) * (*m); ++i) {
     // printf("%4.2f ",h_result[i]);
 
-    if(!isnan(h_r1[i])){
+    if(!isnan(h_scalar[i])){
       //if (i == 1 || i == (*m)) {
       //  printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
       //}
@@ -149,14 +149,14 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(double* a, double* b, do
        c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
        j++;
       } else {
-        c[i] = 1.0 - h_r1[i] / sqrtf(h_r2[i]) / sqrtf(h_r2[i]);
+        c[i] = 1.0 - h_scalar[i] / sqrtf(h_prod1[i]) / sqrtf(h_prod2[i]);
       }
     }
   }
 
-  free(h_r1);
-  free(h_r2);
-  free(h_r3);
+  free(h_prod1);
+  free(h_prod2);
+  free(h_scalar);
   free(d_array);
 }
 
@@ -276,33 +276,33 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
   std::memcpy(d_array2, array2_new, array_size * sizeof(float));
 
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r1 = new unsigned int[( * m) * ( * m_b)];
-  std::memset(h_r1, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
+  unsigned int * h_scalar = new unsigned int[( * m) * ( * m_b)];
+  std::memset(h_scalar, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
  
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r2 = new unsigned int[( * m) * ( * m_b)];
-  std::memset(h_r2, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
+  unsigned int * h_prod1 = new unsigned int[( * m) * ( * m_b)];
+  std::memset(h_prod1, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
  
  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_r3 = new unsigned int[( * m) * ( * m_b)];
-  std::memset(h_r3, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
+  unsigned int * h_prod2 = new unsigned int[( * m) * ( * m_b)];
+  std::memset(h_prod2, 0, ( * m) * ( * m_b) * sizeof(unsigned int));
  
 
   for (int row=0;row<*n;row++){
     for (int col1_num = 0; col1_num < * m; ++col1_num) {
-      for (int col2_num = 0; col2_num < * m_b; ++col2_num) {
+      for (int col2_num = col1_num+1; col2_num < * m_b; ++col2_num) {
         float * col1 = d_array + * n * col1_num;
         float * col2 = d_array + * n * col2_num;
         if (row < *n ) {    
 	    float num = (col1[row] * col2[row]);
             float sum1 = (col1[row] * col1[row]);
             float sum2 = (col2[row] * col2[row]);
-	    h_r1[col1_num * * m_b + col2_num] += num;
-            h_r2[col1_num * * m_b + col2_num] += sum1;
-            h_r3[col1_num * * m_b + col2_num] += sum2;
-            h_r1[col2_num * * m + col1_num] += num;
-            h_r2[col2_num * * m + col1_num] += sum1;
-            h_r3[col2_num * * m + col1_num] += sum2;
+	    h_scalar[col1_num * * m_b + col2_num] += num;
+            h_prod1[col1_num * * m_b + col2_num] += sum1;
+            h_prod2[col1_num * * m_b + col2_num] += sum2;
+            h_scalar[col2_num * * m + col1_num] += num;
+            h_prod1[col2_num * * m + col1_num] += sum1;
+            h_prod2[col2_num * * m + col1_num] += sum2;
                                   
        }
       }
@@ -313,7 +313,7 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
   for (int i = 0; i < (*m) * (*m); ++i) {
     // printf("%4.2f ",h_result[i]);
 
-    if(!isnan(h_r1[i])){
+    if(!isnan(h_scalar[i])){
       //if (i == 1 || i == (*m)) {
       //  printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
       //}
@@ -321,14 +321,14 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
        c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
        j++;
       } else {
-        c[i] = 1.0 - h_r1[i] / sqrtf(h_r2[i]) / sqrtf(h_r2[i]);
+        c[i] = 1.0 - h_scalar[i] / sqrtf(h_prod1[i]) / sqrtf(h_prod2[i]);
       }
     }
   }
 
-  free(h_r1);
-  free(h_r2);
-  free(h_r3);
+  free(h_prod1);
+  free(h_prod2);
+  free(h_scalar);
   free(d_array);
   free(d_array2);
 }
