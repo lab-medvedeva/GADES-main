@@ -59,7 +59,7 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         } else if(metric =='euclidean') {
             fn_name <- "matrix_Euclidean_distance_same_block_cpu"
         } else if(metric =='pearson') {
-            fn_name <- "matrix_Pearson_distance_different_blocks_cpu" #For not different block
+            fn_name <- "matrix_Pearson_distance_same_block_cpu" #For not different block
         } else {
 	    fn_name <- "matrix_Kendall_distance_same_block_cpu"
 	}

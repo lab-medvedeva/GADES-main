@@ -458,58 +458,6 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
   cudaFree(d_array);
   // cudaFree(d_array2);
 }
-
-extern "C" void matrix_Pearson2_distance_different_blocks(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
-  int array_size = *n * *m;
-  float* array_new = new float[*n * *m];
-
-  for (int i = 0; i < array_size; ++i) {
-    array_new[i] = a[i];
-  }
-
-  int array2_size = *n * (*m_b);
-  float* array2_new = new float[array2_size];
-
-  for (int i = 0; i < array2_size; ++i) {
-    array2_new[i] = b[i];
-  }
-
-  float* d_array;
-  float* d_array2;
-
-  cudaMalloc(&d_array, array_size * sizeof(float));
-  cudaMalloc(&d_array2, array_size * sizeof(float));
-
-  cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
-
-  int threads = 16;
-  int blocks_in_row = (*n + threads - 1) / threads;
-  int blocks_in_col = (*n + threads - 1) / threads;
-
-  dim3 THREADS(threads, threads);
-  dim3 BLOCKS(blocks_in_row, blocks_in_col);
-
-  float* d_result;
-  float* h_result = new float[(*m) * (*m_b)];
-
-  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(float)); 
-  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(float));
-
-  //RpearsonCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array,d_array2, *n, *m,*m_b, d_result);
-  cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
- for (int i = 0; i < (*m) * (*m_b); ++i) {
-	 printf("%4.2f ",h_result[i]);
-	 if(!isnan(h_result[i])){
-		 c[i] = (h_result[i]);} //* 2.0f / (*n) / (*n - 1);
-  }
-
-  free(h_result);
-  cudaFree(d_result);
-  cudaFree(d_array);
-  cudaFree(d_array2);
-}
-
 extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
     int array_size = *n * *m;
   float* array_new = new float[*n * *m];
