@@ -114,7 +114,7 @@ __global__ void RpearsonCorr_gpu_atomic_float_same_block(
   int row = blockIdx.x * blockDim.x + threadIdx.x;
   
   for (int col1_num = 0; col1_num < m; ++col1_num) {
-      for (int col2_num = col1_num; col2_num < m; ++col2_num) {
+      for (int col2_num = col1_num+1; col2_num < m; ++col2_num) {
           float* col1 = array + n * col1_num;
           float* col2 = array + n * col2_num;
 
@@ -139,7 +139,7 @@ __global__ void RpearsonCorr_gpu_atomic_float_same_block(
 __global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* scalar_prod,float *x_norm, float* y_norm ){
     int row = blockIdx.x*blockDim.x +threadIdx.x;
     for (int col1_num=0;col1_num<m;++col1_num){
-	for(int col2_num=col1_num;col2_num<m_b;++col2_num){
+	for(int col2_num=0;col2_num<m_b;++col2_num){
 		float* col1 = array + n * col1_num;
 		float* col2 = array2 + n * col2_num;
 		if(row<n) {
@@ -150,9 +150,9 @@ __global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, flo
 				atomicAdd(scalar_prod+col1_num*m_b+col2_num,num);
 				atomicAdd(x_norm+col1_num*m_b+col2_num,sum1);
 				atomicAdd(y_norm+col1_num*m_b+col2_num,sum2);
-				atomicAdd(scalar_prod+col2_num*m+col1_num,num);
-				atomicAdd(x_norm+col2_num*m+col1_num,sum1);
-				atomicAdd(y_norm+col2_num*m+col1_num,sum2);
+				//atomicAdd(scalar_prod+col2_num*m+col1_num,num);
+				//atomicAdd(x_norm+col2_num*m+col1_num,sum1);
+				//atomicAdd(y_norm+col2_num*m+col1_num,sum2);
 				//!debug if(threadIdx.x==0){printf("val1=%4.2f, val2=%4.2f, num=%4.2f, sum1=%4.2f, sum2=%4.2f, \n", col1[row],col2[row],num,sum1,sum2);}
 			}
 		}
@@ -253,7 +253,7 @@ extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* no
 
   int threads = 256;
   int blocks_in_row = (*n + threads - 1) / threads;
-  int blocks_in_col = *n;
+  //int blocks_in_col = *n;
 
 
   unsigned int* d_result;
@@ -356,7 +356,7 @@ extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b,
 
   int threads = 256;
   int blocks_in_row = (*n + threads - 1) / threads;
-  int blocks_in_col = *n ;
+  //int blocks_in_col = *n ;
 
   unsigned int* d_result;
   unsigned int* h_result = new unsigned int[(*m) * (*m_b)];
@@ -447,8 +447,9 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
        c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
        j++;  
       } else {
-      c[i] = 1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
-    }}
+        c[i] = 1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
+      }
+    }
   }
 
   free(h_result);
@@ -524,8 +525,9 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
        c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
        j++;  
       } else {
-      c[i] = 1.0 - h_scalar[i] / sqrtf(h_prod1[i]) / sqrtf(h_prod2[i]);
-    }}
+        c[i] = 1.0 - h_scalar[i] / sqrtf(h_prod1[i]) / sqrtf(h_prod2[i]);
+      }
+    }
   }
 
 
