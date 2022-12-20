@@ -8,17 +8,26 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 find_package(CUDA REQUIRED)
 find_package(R REQUIRED)
 
+if(CUDA_FOUND)
 
-cuda_add_library(
-    mtrx
-    SHARED
-    main.cu
-)
-add_library (mtrx_cpu SHARED main.cpp)
+	cuda_add_library(
+	    mtrx
+	    SHARED
+	    main.cu
+	)
+	set_target_properties(mtrx PROPERTIES PREFIX "")
+	target_include_directories(mtrx PUBLIC ${R_INCLUDE_DIR})
+	target_link_libraries(mtrx ${R_LIBRARIES})
+else()
+	add_library (mtrx_cpu SHARED main.cpp)
 
-set_target_properties(mtrx PROPERTIES PREFIX "")
-set_target_properties(mtrx_cpu PROPERTIES PREFIX "")
-target_include_directories (mtrx_cpu PUBLIC ${R_INCLUDE_DIR})
-target_include_directories(mtrx PUBLIC ${R_INCLUDE_DIR})
-target_link_libraries(mtrx ${R_LIBRARIES})
-target_link_libraries(mtrx_cpu ${R_LIBRARIES})
+	set_target_properties(mtrx_cpu PROPERTIES PREFIX "")
+	target_include_directories (mtrx_cpu PUBLIC ${R_INCLUDE_DIR})
+	target_link_libraries(mtrx_cpu ${R_LIBRARIES})
+endif(CUDA_FOUND)
+#cuda_add_library(
+#    mtrx
+#    SHARED
+#    main.cu
+#)
+
