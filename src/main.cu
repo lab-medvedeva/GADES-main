@@ -191,6 +191,16 @@ __global__ void RpearsonChi_gpu_atomic_float_different_blocks(float* array, floa
   }
 }
 
+//' Driver Function for calculation of Kendall matrix for same block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
   int array_size = *n * *m;
@@ -234,6 +244,16 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
 }
 
 
+//' Driver Function for calculation of Euclidean matrix for same block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
 
@@ -276,6 +296,16 @@ extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* no
 }
 
 
+//' Driver Function for calculation of Kendall matrix for different block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, double* c, int* n, int* m, int* m_b){
 
   int array_size = *n * *m;
@@ -329,6 +359,16 @@ extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, d
 }
 
 
+//' Driver Function for calculation of Euclidean matrix for different block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b, double* c, int* n, int* m, int* m_b){
 
   int array_size = *n * *m;
@@ -378,6 +418,16 @@ extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b,
   cudaFree(d_array2);
 }
 
+//' Driver Function for calculation of Pearson matrix for same block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
   int array_size = *n * *m;
   float* array_new = new float[*n * *m];
@@ -459,6 +509,17 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
   cudaFree(d_array);
   // cudaFree(d_array2);
 }
+
+//' Driver Function for calculation of Pearson matrix for different block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel, 
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//' 
 extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
     int array_size = *n * *m;
   float* array_new = new float[*n * *m];

@@ -1,3 +1,12 @@
+#' Function to process batch from shared objects for GPU.
+#'
+#' @param count_matrix Count Matrix.
+#' @param first_index index.
+#' @param second_index index.
+#' @param batch_size  int.
+#' @param metric string for metric.
+#' @return A list of correlation matrix, batch_a size and batch_b size.
+#' @export
 process_batch <- function(count_matrix, first_index, second_index, batch_size, metric) {
     if (first_index == second_index) {
         if (metric == 'kendall') {
@@ -52,6 +61,16 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
         )
     )
 }
+
+#' Function to process batch from shared objects for CPU.
+#'
+#' @param count_matrix Count Matrix.
+#' @param first_index index.
+#' @param second_index index.
+#' @param batch_size  int.
+#' @param metric string for metric.
+#' @return A list of correlation matrix, batch_a size and batch_b size.
+#' @export
 process_batch_cpu <- function(count_matrix, first_index, second_index, batch_size, metric) {
     if (first_index == second_index) {
         if (metric == 'kendall') {
@@ -109,7 +128,15 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
     )
 }
 
-
+#' Function for generating report for distance matric.
+#'
+#' @param a Something.
+#' @param filename CSV file.
+#' @param batch_size int.
+#' @param metric string for matric selection.
+#' @param type "gpu" or "cpu".
+#' @return A list of correlation matrix, batch_a size and batch_b size.
+#' @export
 mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu")
 {
   if(!is.loaded("matrix_Kendall_distance_same_block")) {
@@ -176,7 +203,11 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
   }
 }
 
-
+#' get matrix from file.
+#' 
+#' @param filename File path for csv.
+#' @return data countmatrix data.
+#' @export
 mtrx_read_kdm <- function(filename){
   MATRIXFILE <- file(filename, "rb")
   m <- readBin(MATRIXFILE, integer(), n = 1, size = 4)
