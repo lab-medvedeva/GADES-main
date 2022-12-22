@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(CompileProject)
 
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/src/cmake)
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/lib/cmake)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 find_package(CUDA REQUIRED)
