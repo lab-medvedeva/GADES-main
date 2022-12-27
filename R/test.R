@@ -1,11 +1,12 @@
-dyn.load("src/mtrx.so")
-dyn.load("src/mtrx_cpu.so")
-source("R/mtrx.R")
+dyn.load("../lib/mtrx.so")
+dyn.load("../src/mtrx_cpu.so")
+source("mtrx.R")
 library(amap)
 library(edgeR)
 library(biomaRt)
 library(Hobotnica)
 library(MASS)
+library(philentropy)
 library("factoextra")
 
 args = commandArgs(trailingOnly=TRUE)
@@ -39,6 +40,8 @@ for (i in 1:times) {
         #print(distMatrix_mtrx)
     } else if (method == 'factoextra') {
         distMatrix_mtrx <- as.matrix(get_dist(data, method = metric))
+    } else if (method == 'philentropy') {
+    	distMatrix_mtrx <- as.matrix(philentropy::distance(t(data), method=metric))
     }
     end_time <- as.numeric(Sys.time()) * 1000000
 
