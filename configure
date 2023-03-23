@@ -7,13 +7,21 @@ CC=`"${R_HOME}/bin/R" CMD config CC`
 CFLAGS=`"${R_HOME}/bin/R" CMD config CFLAGS`
 CPPFLAGS=`"${R_HOME}/bin/R" CMD config CPPFLAGS`
 LDFLAGS=`"${R_HOME}/bin/R" CMD config LDFLAGS`
-
+mkdir -p lib
+pwd
 cd lib 
-mkdir build && cd build
+pwd
+
+mkdir -p build && cd build
+pwd
+ls ../../
 cmake ../../ \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_SHARED_LIBS:bool=OFF \
-  -DCMAKE_POSITION_INDEPENDENT_CODE:bool=ON
+  -DCMAKE_POSITION_INDEPENDENT_CODE:bool=ON \
+  -DR_ROOT=${R_HOME} \
+  -DCMAKE_INSTALL_PREFIX=../../inst
+echo ${MAKE}
 ${MAKE}
-
+make install
 

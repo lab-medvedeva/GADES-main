@@ -1,11 +1,9 @@
-dyn.load("../lib/mtrx.so")
-dyn.load("../src/mtrx_cpu.so")
-source("mtrx.R")
+#dyn.load("../lib/mtrx.so")
+#dyn.load("../src/mtrx_cpu.so")
+#source("mtrx.R")
 library(amap)
-library(edgeR)
-library(biomaRt)
-library(Hobotnica)
-library(MASS)
+library(HobotnicaGPU)
+#library(MASS)
 library(philentropy)
 library("factoextra")
 
@@ -32,6 +30,7 @@ for (i in 1:times) {
         print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         print(metric)
+        library.dynam()
         distMatrix_mtrx <- mtrx_distance(data, batch_size = 10000, metric = metric,type="cpu")
         print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
