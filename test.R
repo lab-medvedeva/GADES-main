@@ -1,10 +1,18 @@
+if(!is.loaded("matrix_Kendall_distance_same_block")) {
+        library.dynam('mtrx', package = 'HobotnicaGPU', lib.loc = NULL)
+}
+if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
+       library.dynam('mtrx_cpu', package = 'HobotnicaGPU', lib.loc = NULL)
+    }
+
+.C("check_gpu", PACKAGE = "mtrx")
 #dyn.load("../lib/mtrx.so")
 #dyn.load("../src/mtrx_cpu.so")
 #source("mtrx.R")
 library(amap)
 library(HobotnicaGPU)
 #library(MASS)
-library(philentropy)
+#library(philentropy)
 library("factoextra")
 
 args = commandArgs(trailingOnly=TRUE)
@@ -25,14 +33,14 @@ for (i in 1:times) {
 #data_matrix <- as.matrix(data)
 
     if (method == 'GPU') {
-        print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 10000, metric = metric,type="gpu")
-        print(dim(distMatrix_mtrx))
+        #print(metric)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu")
+        #print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
-        print(metric)
-        library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 10000, metric = metric,type="cpu")
-        print(dim(distMatrix_mtrx))
+        #print(metric)
+        #library.dynam()
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="cpu")
+        #print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
         distMatrix_mtrx <- as.matrix(Dist(t(data), method=metric, nbproc=24))
@@ -45,6 +53,7 @@ for (i in 1:times) {
     end_time <- as.numeric(Sys.time()) * 1000000
 
     measurements[i] <- end_time - st_t
+    gc()
     #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
 

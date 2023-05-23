@@ -1,3 +1,4 @@
+#include <time.h>
 #include <iostream>
 #include <fstream>
 #include <R.h>
@@ -42,6 +43,7 @@ __global__ void Rkendall_gpu_atomic_float(float* array, const int n, const int m
       }
   }
 }
+
 
 __global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int m, unsigned int* result) {
   
@@ -191,6 +193,16 @@ __global__ void RpearsonChi_gpu_atomic_float_different_blocks(float* array, floa
   }
 }
 
+extern "C" bool check_gpu() {
+    cudaDeviceProp deviceProp;
+	cudaGetDeviceProperties(&deviceProp, 0);
+    cudaEvent_t start;
+    cudaEventCreate(&start);
+    cudaEventRecord(start);
+    cudaEventSynchronize(start);
+    return true;
+}
+
 //' Driver Function for calculation of Kendall matrix for same block.
 //'
 //' Allocates Memory required for the operation. Then,
@@ -203,6 +215,12 @@ __global__ void RpearsonChi_gpu_atomic_float_different_blocks(float* array, floa
 //' 
 extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not used */, double* c, int* n, int* m, int* m_b){
 
+  clock_t start_1, end;
+  cudaEvent_t start, stop1, stop2, stop3;
+  double cpu_time_used;
+  start_1 = clock();
+
+  float milliseconds = 0.0f;
   int array_size = *n * *m;
 
   float* array_new = new float[*n * *m];
@@ -210,13 +228,34 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   for (int i = 0; i < array_size; ++i) {
     array_new[i] = a[i];
   }
+  end = clock();
+  cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC * 1000.0;
+  Rprintf("%lf create array time \n", cpu_time_used);
 
+  //cudaEventCreate(&start);
+  //cudaEventCreate(&stop1);
+  //cudaEventCreate(&stop2);
+  //cudaEventCreate(&stop3);
+  //cudaEventRecord(start);
+  
+  
   float* d_array;
 
   cudaMalloc(&d_array, array_size * sizeof(float));
+  end = clock();
+
+  cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC * 1000.0;
+  Rprintf("%lf create event and record \n", cpu_time_used);
 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
+  //cudaEventRecord(stop1);
+  //cudaEventSynchronize(stop1);
+  end = clock();
+  cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC * 1000;
+  Rprintf("%lf stop1 time \n", cpu_time_used);
+  //cudaEventElapsedTime(&milliseconds, start, stop1);
 
+  //Rprintf("%f memcpy\n", milliseconds);
   int threads = 16;
   int blocks_in_row = (*n + threads - 1) / threads;
   int blocks_in_col = (*n + threads - 1) / threads;
@@ -229,11 +268,18 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   cudaMalloc(&d_result, (*m) * (*m) * sizeof(unsigned int));
   cudaMemset(d_result, 0, (*m) * (*m) * sizeof(unsigned int));
 
+  //cudaEventRecord(stop2);
+  //cudaEventSynchronize(stop2);
+
+  //cudaEventElapsedTime(&milliseconds, start, stop2);
+
+  // Rprintf("%f memset\n", milliseconds);
+
   Rkendall_gpu_atomic_float<<<BLOCKS, THREADS>>>(d_array, *n, *m, d_result);
 
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
 
-
+  
   for (int i = 0; i < (*m) * (*m); ++i) {
     c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
   }
@@ -241,6 +287,16 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   free(h_result);
   cudaFree(d_result);
   cudaFree(d_array);
+
+  //cudaEventRecord(stop3);
+  //cudaEventSynchronize(stop3);
+
+  //cudaEventElapsedTime(&milliseconds, start, stop3);
+  //Rprintf("%f kernel call\n", milliseconds);
+  
+  end = clock();
+  cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC;
+  Rprintf("%lf all time \n", cpu_time_used);
 }
 
 
