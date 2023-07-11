@@ -11,6 +11,7 @@ if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
 #source("mtrx.R")
 library(amap)
 library(HobotnicaGPU)
+library(glue)
 #library(MASS)
 #library(philentropy)
 library("factoextra")
@@ -23,12 +24,15 @@ metric = args[4]
 
 dataout = "Kendall_2.csv"
 print('Reading table')
-data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
 print('Completed reading')
 
 measurements <- numeric(times)
 
 for (i in 1:times) {
+    fname <- glue('{datain}/{i}.csv')
+    print(fname)
+    #fname <- datain
+    data <- t(as.matrix(read.table(fname, header=T, row.names = 1, sep=",")))
     st_t <- as.numeric(Sys.time()) * 1000000
 #data_matrix <- as.matrix(data)
 
@@ -61,11 +65,8 @@ print(mean(as.matrix(measurements)))
 print(sd(as.matrix(measurements)))
 print(as.matrix(measurements))
 print('Matrix')
+result = glue('{datain}.out.{metric}.csv')
+write.table(measurements[2:times], result, sep=',')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
-print(distMatrix_mtrx[1:10, 1:10])
-cat('\n', file = dataout, append = TRUE)
 
 #' function for nothing...
-add <- function(x, y) {
-  x + y
-}
