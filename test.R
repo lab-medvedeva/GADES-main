@@ -6,13 +6,11 @@ if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
     }
 
 .C("check_gpu", PACKAGE = "mtrx")
-#dyn.load("../lib/mtrx.so")
-#dyn.load("../src/mtrx_cpu.so")
-#source("mtrx.R")
+
+
 library(amap)
 library(HobotnicaGPU)
-#library(MASS)
-#library(philentropy)
+library(Matrix)
 library("factoextra")
 
 args = commandArgs(trailingOnly=TRUE)
@@ -21,9 +19,11 @@ method = args[2]
 times = strtoi(args[3])
 metric = args[4]
 
-dataout = "Kendall_2.csv"
+
 print('Reading table')
-data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
+
+data <- readMM(datain)
+# data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
 print('Completed reading')
 
 measurements <- numeric(times)
@@ -39,8 +39,8 @@ for (i in 1:times) {
     } else if (method == 'CPU') {
         #print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="cpu")
-        #print(dim(distMatrix_mtrx))
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric, type="cpu", sparse=T)
+        print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
         distMatrix_mtrx <- as.matrix(Dist(t(data), method=metric, nbproc=24))
@@ -62,10 +62,42 @@ print(sd(as.matrix(measurements)))
 print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
-print(distMatrix_mtrx[1:10, 1:10])
-cat('\n', file = dataout, append = TRUE)
+print(distMatrix_mtrx[1:8, 1:8])
 
-#' function for nothing...
-add <- function(x, y) {
-  x + y
+measurements <- numeric(times)
+
+for (i in 1:times) {
+    st_t <- as.numeric(Sys.time()) * 1000000
+#data_matrix <- as.matrix(data)
+
+    if (method == 'GPU') {
+        #print(metric)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu")
+        #print(dim(distMatrix_mtrx))
+    } else if (method == 'CPU') {
+        #print(metric)
+        #library.dynam()
+        distMatrix_mtrx <- mtrx_distance(as.matrix(data), batch_size = 5000, metric = metric,type="cpu")
+        print(dim(distMatrix_mtrx))
+    } else if (method == 'amap') {
+        print('Calc dist')
+        distMatrix_mtrx <- as.matrix(Dist(t(data), method=metric, nbproc=24))
+        #print(distMatrix_mtrx)
+    } else if (method == 'factoextra') {
+        distMatrix_mtrx <- as.matrix(get_dist(data, method = metric))
+    } else if (method == 'philentropy') {
+    	distMatrix_mtrx <- as.matrix(philentropy::distance(t(data), method=metric))
+    }
+    end_time <- as.numeric(Sys.time()) * 1000000
+
+    measurements[i] <- end_time - st_t
+    gc()
+    #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
+
+print(mean(as.matrix(measurements)))
+print(sd(as.matrix(measurements)))
+print(as.matrix(measurements))
+print('Matrix')
+#write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
+print(distMatrix_mtrx[1:8, 1:8])

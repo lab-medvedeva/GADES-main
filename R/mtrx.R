@@ -5,6 +5,7 @@ if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
        library.dynam('mtrx_cpu', package = 'HobotnicaGPU', lib.loc = NULL)
     }
 
+library(glue)
 
 #' Function to process batch from shared objects for GPU.
 #'
@@ -96,12 +97,19 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
 #' @param metric string for metric.
 #' @return A list of correlation matrix, batch_a size and batch_b size.
 #' @export
-process_batch_cpu <- function(count_matrix, first_index, second_index, batch_size, metric) {
+process_batch_cpu <- function(count_matrix, first_index, second_index, batch_size, metric, sparse = F) {
+    library(glue)
+    if (sparse) {
+        postfix <- '_sparse'
+    } else {
+        postfix <- ''
+    }
+
     if (first_index == second_index) {
         if (metric == 'kendall') {
             fn_name <- "matrix_Kendall_distance_same_block_cpu"
         } else if(metric =='euclidean') {
-            fn_name <- "matrix_Euclidean_distance_same_block_cpu"
+            fn_name <- glue("matrix_Euclidean{postfix}_distance_same_block_cpu")
         } else if(metric =='pearson') {
             fn_name <- "matrix_Pearson_distance_same_block_cpu" #For not different block
         } else {
@@ -131,16 +139,46 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
-    result <- .C(
-        fn_name,
-        matrix_a = as.double(count_submatrix_a),
-        matrix_b = as.double(count_submatrix_b),
-        dist_matrix = double(batch_a_size * batch_b_size),
-        rows = as.integer(nrow(count_matrix)),
-        cols_a = as.integer(batch_a_size),
-        cols_b = as.integer(batch_b_size),
-	PACKAGE = "mtrx_cpu"
-    )$dist_matrix
+    if (sparse) {
+        count_submatrix_a <- as(count_submatrix_a, "RsparseMatrix")
+        count_submatrix_b <- as(count_submatrix_b, "RsparseMatrix")
+
+        a_positions <- count_submatrix_a@p
+        a_index <- count_submatrix_a@j
+        a_values <- count_submatrix_a@x
+        
+        b_positions <- count_submatrix_b@p
+        b_index <- count_submatrix_b@j
+        b_values <- count_submatrix_b@x
+
+        result <- .C(
+            fn_name,
+            a_index = a_index,
+            a_positions = a_positions,
+            a_values = a_values,
+            b_index = b_index,
+            b_positions = b_positions,
+            b_values = b_values,
+            dist_matrix = double(batch_a_size * batch_b_size),
+            rows = as.integer(nrow(count_matrix)),
+            cols_a = as.integer(batch_a_size),
+            cols_b = as.integer(batch_b_size),
+            num_elements_a = as.integer(length(a_values)),
+            num_elements_b = as.integer(length(b_values)),
+            PACKAGE = "mtrx_cpu"
+        )$dist_matrix
+    } else {
+        result <- .C(
+            fn_name,
+            matrix_a = as.double(count_submatrix_a),
+            matrix_b = as.double(count_submatrix_b),
+            dist_matrix = double(batch_a_size * batch_b_size),
+            rows = as.integer(nrow(count_matrix)),
+            cols_a = as.integer(batch_a_size),
+            cols_b = as.integer(batch_b_size),
+        PACKAGE = "mtrx_cpu"
+        )$dist_matrix
+    }
 
     dim(result) <- c(batch_a_size, batch_b_size)
 
@@ -162,7 +200,7 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 #' @param type "gpu" or "cpu".
 #' @return A list of correlation matrix, batch_a size and batch_b size.
 #' @export
-mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu")
+mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu", sparse = F)
 {
   n <- nrow(a)
   m <- ncol(a)
@@ -187,12 +225,14 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
                 	batch_size = batch_size,
                 	metric = metric)
 	    } else if (type=="cpu"){ 
-		result <- process_batch_cpu(
+		    result <- process_batch_cpu(
                 	count_matrix = a,
                 	first_index = first_index,
                 	second_index = second_index,
                 	batch_size = batch_size,
-                	metric = metric)
+                	metric = metric,
+                    sparse = sparse
+                )
             }
             a_left = first_index + 1
             a_right = first_index + result$batch_a_size

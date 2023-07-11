@@ -20,8 +20,8 @@ extern "C" void matrix_Euclidean_distance_same_block_cpu(double * a, double * b,
   std::memcpy(d_array, array_new, array_size * sizeof(float));
 
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_result = new unsigned int[( * m) * ( * m)];
-  std::memset(h_result, 0, ( * m) * ( * m) * sizeof(unsigned int));
+  float * h_result = new float[( * m) * ( * m)];
+  std::memset(h_result, 0, ( * m) * ( * m) * sizeof(float));
 
   //CPU Implementation
   for (int row = 0; row < * n; row++) {
@@ -104,15 +104,15 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(double* a, double* b, do
   std::memcpy(d_array, array_new, array_size * sizeof(float));
 
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_scalar = new unsigned int[( * m) * ( * m)];
+  float * h_scalar = new float[( * m) * ( * m)];
   std::memset(h_scalar, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_prod1 = new unsigned int[( * m) * ( * m)];
+  float * h_prod1 = new float[( * m) * ( * m)];
   std::memset(h_prod1, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
-  unsigned int * h_prod2 = new unsigned int[( * m) * ( * m)];
+  float * h_prod2 = new float[( * m) * ( * m)];
   std::memset(h_prod2, 0, ( * m) * ( * m) * sizeof(unsigned int));
  
 
@@ -424,4 +424,85 @@ extern "C" void  matrix_PearsonChi_distance_different_blocks_cpu(double* a, doub
   free(h_result);
   free(d_array);
   free(d_array2);
+}
+
+
+extern "C" void  matrix_Euclidean_sparse_distance_same_block_cpu(
+  int *a_index,
+  int *a_positions,
+  double *a_double_values,
+  int *b_index,
+  int *b_positions,
+  double *b_double_values,
+  double *result,
+  int *num_rows,
+  int *num_columns,
+  int *num_columns_b,
+  int *num_elements_a,
+  int *num_elements_b
+){
+  int rows = *num_rows;
+  int columns = *num_columns;
+
+  float * a_values = new float[*num_elements_a];
+  float * float_result = new float[columns * columns];
+  for (int i = 0; i < *num_elements_a; ++i) {
+    a_values[i] = a_double_values[i];
+  }
+
+  for (int i = 0; i < columns * columns; ++i) {
+    float_result[i] = 0.0f;
+  }
+
+  for (int row_index = 0; row_index < rows; ++row_index) {
+    int start_column = a_positions[row_index];
+    int end_column = a_positions[row_index + 1];
+
+    for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+      
+      for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
+        int prev_col_index = col1_index - 1;
+        int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+
+        int next_col_index = col2_index + 1;
+        int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
+
+        int col1 = a_index[col1_index];
+        int col2 = a_index[col2_index];
+
+        float value1 = a_values[col1_index];
+        float value2 = a_values[col2_index];
+
+        for (int left = prev_col + 1; left < col1; ++left) {
+          float_result[left * columns + col2] += value2 * value2;
+          float_result[col2 * columns + left] += value2 * value2;
+          // if (left + col2 == 1) {
+          //   std::cout << "L" << " " << prev_col << " " << row_index << " left " << left << " col2 " << col2 << " col1 " << col1 << " "  << value2 << std::endl;
+          // }
+        }
+
+        for (int right = col2 + 1; right < next_col; ++right) {
+          float_result[right * columns + col1] += value1 * value1;
+          float_result[col1 * columns + right] += value1 * value1;
+
+          // if (right + col1 == 1) {
+          //   std::cout << "R" << row_index << " " << right << " " << col1 << " " << col2 << " " << value1 << std::endl;
+          // }
+        }
+
+        float_result[col1 * columns + col2] += (value1 - value2) * (value1 - value2);
+        float_result[col2 * columns + col1] += (value1 - value2) * (value1 - value2);
+        // if (col1 + col2 == 1) {
+        //     std::cout << "D" << row_index << " " << col1 << " " << col2 << " " << value1 - value2 << std::endl;
+        // }
+      }
+    }
+  }
+
+  for (int i = 0; i < columns * columns; ++i) {
+    result[i] = std::sqrt(float_result[i]);
+  }
+  
+  free(float_result);
+  free(a_values);
 }
