@@ -119,16 +119,16 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         if (metric == 'kendall') {
             fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
         } else if(metric =='euclidean') {
-            fn_name <- "matrix_Euclidean_distance_different_blocks_cpu"
+            fn_name <- glue("matrix_Euclidean{postfix}_distance_different_blocks_cpu")
         } else if(metric =='pearson') {
             fn_name <- "matrix_Pearson_distance_different_blocks_cpu"
         }
         else {
-	    fn_name <-"matrix_kendall_distance_different_blocks_cpu"
-	}
+            fn_name <-"matrix_kendall_distance_different_blocks_cpu"
+        }
        #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    print(fn_name)
+    # print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
@@ -242,7 +242,7 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
             correlation_matrix <- result$correlation_matrix
             result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
             end_t <- as.numeric(Sys.time()) * 1000000
-            print(end_t - st_t)
+            # print(end_t - st_t)
         }
     } 
     

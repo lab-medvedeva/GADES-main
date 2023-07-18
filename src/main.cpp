@@ -506,3 +506,92 @@ extern "C" void  matrix_Euclidean_sparse_distance_same_block_cpu(
   free(float_result);
   free(a_values);
 }
+
+extern "C" void  matrix_Euclidean_sparse_distance_different_blocks_cpu(
+  int *a_index,
+  int *a_positions,
+  double *a_double_values,
+  int *b_index,
+  int *b_positions,
+  double *b_double_values,
+  double *result,
+  int *num_rows,
+  int *num_columns,
+  int *num_columns_b,
+  int *num_elements_a,
+  int *num_elements_b
+){
+  int rows = *num_rows;
+  int columns = *num_columns;
+  int columns_b = *num_columns_b;
+
+  float * a_values = new float[*num_elements_a];
+  float * float_result = new float[columns * columns_b];
+  for (int i = 0; i < *num_elements_a; ++i) {
+    a_values[i] = a_double_values[i];
+  }
+
+  for (int i = 0; i < columns * columns_b; ++i) {
+    float_result[i] = 0.0f;
+  }
+
+  float * b_values = new float[*num_elements_b];
+  for (int i = 0; i < *num_elements_b; ++i) {
+    b_values[i] = b_double_values[i];
+  }
+
+
+  for (int row_index = 0; row_index < rows; ++row_index) {
+    int start_column = a_positions[row_index];
+    int end_column = a_positions[row_index + 1];
+
+    int start_column_b = b_positions[row_index];
+    int end_column_b = b_positions[row_index + 1];
+
+    for (int col1_index = start_column; col1_index <= end_column; ++col1_index) {
+      int prev_col_index = col1_index - 1;
+      int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+      float value1 = (col1_index < end_column) ? a_values[col1_index] : 0.0f;
+
+      int col1 = (col1_index < end_column) ? a_index[col1_index] : columns;
+
+      for (int col2_index = start_column_b; col2_index <= end_column_b; ++col2_index) {
+        // std::cout << col1_index << " " << start_column << " " << end_column << " " << col2_index << std::endl;
+        int prev_col_b_index = col2_index - 1;
+        int prev_col2 = (prev_col_b_index >= start_column_b) ? b_index[prev_col_b_index] : -1;
+
+        int col2 = (col2_index < end_column_b) ? b_index[col2_index] : columns_b;
+
+        
+        float value2 = (col2_index < end_column_b) ? b_values[col2_index] : 0.0f;
+        
+        if (col2 < columns_b) {
+          for (int left = prev_col + 1; left < col1; ++left) {
+            float_result[col2 * columns + left] += value2 * value2;
+          }
+        }
+        if (col1 < columns) {
+          for (int left = prev_col2 + 1; left < col2; ++left) {
+            float_result[left * columns + col1] += value1 * value1;
+          }
+        }
+
+        if (col1 < columns && col2 < columns_b) {
+          float_result[col2 * columns + col1] += (value1 - value2) * (value1 - value2);
+        }
+        // std::cout << "Done" << std::endl;
+        // if (col1 + col2 == 1) {
+        //     std::cout << "D" << row_index << " " << col1 << " " << col2 << " " << value1 - value2 << std::endl;
+        // }
+      }
+    }
+  }
+
+  for (int i = 0; i < columns * columns_b; ++i) {
+    result[i] = std::sqrt(float_result[i]);
+  }
+  
+  free(float_result);
+  free(a_values);
+  free(b_values);
+}
