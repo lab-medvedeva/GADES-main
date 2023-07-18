@@ -39,7 +39,7 @@ for (i in 1:times) {
     } else if (method == 'CPU') {
         #print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 1000, metric = metric, type="cpu", sparse=T)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5, metric = metric, type="cpu", sparse=T)
         # print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
