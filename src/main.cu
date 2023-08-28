@@ -659,6 +659,105 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   cudaFree(d_array2);
 }
 
+//' Driver Function for calculation of Pearson matrix for different block.
+//'
+//' Allocates Memory required for the operation. Then,
+//' efficiently calculate the distance matrix using the kernel,
+//' which is translated to appropriate R tables.
+//'
+//' @param a,b,c double pointers pointing to memory.
+//' @param n,m,m_b Boundary values.
+//' @export
+//'`
+__global__ void matrix_Euclidean_sparse_distance_same_block_gpu(
+  int *a_index,
+  int *a_positions,
+  float *a_values,  // Use float instead of double for GPU calculations
+  float *result,
+  int num_rows,
+  int num_columns
+) {
+  int row_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (row_index < num_rows) {
+    int start_column = a_positions[row_index];
+    int end_column = a_positions[row_index + 1];
+
+    for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+      for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
+        int prev_col_index = col1_index - 1;
+        int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+
+        int next_col_index = col2_index + 1;
+        int next_col = (next_col_index < end_column) ? a_index[next_col_index] : num_columns;
+
+        int col1 = a_index[col1_index];
+        int col2 = a_index[col2_index];
+
+        float value1 = a_values[col1_index];
+        float value2 = a_values[col2_index];
+
+        for (int left = prev_col + 1; left < col1; ++left) {
+          atomicAdd(&result[left * num_columns + col2], value2 * value2);
+          atomicAdd(&result[col2 * num_columns + left], value2 * value2);
+        }
+
+        for (int right = col2 + 1; right < next_col; ++right) {
+          atomicAdd(&result[right * num_columns + col1], value1 * value1);
+          atomicAdd(&result[col1 * num_columns + right], value1 * value1);
+        }
+
+        atomicAdd(&result[col1 * num_columns + col2], (value1 - value2) * (value1 - value2));
+        atomicAdd(&result[col2 * num_columns + col1], (value1 - value2) * (value1 - value2));
+      }
+    }
+  }
+}
+
+extern "C" void matrix_Euclidean_sparse_distance_same_block_gpu_wrapper(
+  int *a_index,
+  int *a_positions,
+  double *a_double_values,
+  double *result,
+  int num_rows,
+  int num_columns,
+  int num_elements_a
+) {
+  float *a_values = new float[num_elements_a];
+  for (int i = 0; i < num_elements_a; ++i) {
+    a_values[i] = static_cast<float>(a_double_values[i]);
+  }
+
+  float *d_a_values, *d_result;
+  int *d_a_index, *d_a_positions;
+
+  cudaMalloc(&d_a_values, num_elements_a * sizeof(float));
+  cudaMalloc(&d_result, num_columns * num_columns * sizeof(float));
+  cudaMalloc(&d_a_index, num_elements_a * sizeof(int));
+  cudaMalloc(&d_a_positions, (num_rows + 1) * sizeof(int));
+
+  cudaMemcpy(d_a_values, a_values, num_elements_a * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_a_index, a_index, num_elements_a * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_a_positions, a_positions, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+  int threadsPerBlock = 256;
+  int numBlocks = (num_rows + threadsPerBlock - 1) / threadsPerBlock;
+
+  matrix_Euclidean_sparse_distance_same_block_gpu<<<numBlocks, threadsPerBlock>>>(
+    d_a_index, d_a_positions, d_a_values, d_result, num_rows, num_columns
+  );
+
+  cudaMemcpy(result, d_result, num_columns * num_columns * sizeof(float), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_a_values);
+  cudaFree(d_result);
+  cudaFree(d_a_index);
+  cudaFree(d_a_positions);
+
+  delete[] a_values;
+}
+
+
 extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){
   std::ofstream RESULTFILE(*fout, std::ios::binary|std::ios::app);
   size_t dataset_column_size = *n * sizeof(double);
