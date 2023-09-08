@@ -756,7 +756,352 @@ extern "C" void matrix_Euclidean_sparse_distance_same_block_gpu_wrapper(
 
   delete[] a_values;
 }
+//====================================TESTING SPARSE METHODS==============================
+__global__ void ReuclideanSparse_gpu_atomic_float_different_blocks(
+    int* a_index, int* a_positions, float* a_double_values,
+    int* b_index, int* b_positions, float* b_double_values,
+    int rows, int columns, int columns_b, float* result) {
 
+    int row_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row_index < rows) {
+        int start_column = a_positions[row_index];
+        int end_column = a_positions[row_index + 1];
+
+        int start_column_b = b_positions[row_index];
+        int end_column_b = b_positions[row_index + 1];
+
+        for (int col1_index = start_column; col1_index <= end_column; ++col1_index) {
+            int prev_col_index = col1_index - 1;
+            int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+            float value1 = (col1_index < end_column) ? a_double_values[col1_index] : 0.0f;
+
+            int col1 = (col1_index < end_column) ? a_index[col1_index] : columns;
+
+            for (int col2_index = start_column_b; col2_index <= end_column_b; ++col2_index) {
+                int prev_col_b_index = col2_index - 1;
+                int prev_col2 = (prev_col_b_index >= start_column_b) ? b_index[prev_col_b_index] : -1;
+
+                int col2 = (col2_index < end_column_b) ? b_index[col2_index] : columns_b;
+
+                float value2 = (col2_index < end_column_b) ? b_double_values[col2_index] : 0.0f;
+
+                if (col2 < columns_b) {
+                    for (int left = prev_col + 1; left < col1; ++left) {
+                        atomicAdd(&result[col2 * columns + left], value2 * value2);
+                    }
+                }
+
+                if (col1 < columns) {
+                    for (int left = prev_col2 + 1; left < col2; ++left) {
+                        atomicAdd(&result[left * columns + col1], value1 * value1);
+                    }
+                }
+
+                if (col1 < columns && col2 < columns_b) {
+                    float diff = (value1 - value2) * (value1 - value2);
+                    atomicAdd(&result[col2 * columns + col1], diff);
+                }
+            }
+        }
+    }
+}
+
+extern "C" void matrix_Euclidean_sparse_distance_different_blocks(
+    int* a_index, int* a_positions, double* a_double_values,
+    int* b_index, int* b_positions, double* b_double_values,
+    double* result, int* num_rows, int* num_columns, int* num_columns_b,
+    int* num_elements_a, int* num_elements_b) {
+
+    int rows = *num_rows;
+    int columns = *num_columns;
+    int columns_b = *num_columns_b;
+    int num_elements_a_int = *num_elements_a;
+
+    float* a_values = new float[num_elements_a_int];
+    float* float_result = new float[columns * columns_b];
+
+    for (int i = 0; i < num_elements_a_int; ++i) {
+        a_values[i] = static_cast<float>(a_double_values[i]);
+    }
+
+    for (int i = 0; i < columns * columns_b; ++i) {
+        float_result[i] = 0.0f;
+    }
+
+    int* d_a_index;
+    int* d_a_positions;
+    float* d_a_values;
+    int* d_b_index;
+    int* d_b_positions;
+    float* d_b_values;
+    float* d_result;
+
+    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
+    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
+    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
+    cudaMalloc(&d_b_index, num_elements_a_int * sizeof(int));  // Use the same size as 'a' since 'b' is not used in this version
+    cudaMalloc(&d_b_positions, (rows + 1) * sizeof(int));       // Use the same size as 'a' since 'b' is not used in this version
+    cudaMalloc(&d_b_values, num_elements_a_int * sizeof(float)); // Use the same size as 'a' since 'b' is not used in this version
+    cudaMalloc(&d_result, columns * columns_b * sizeof(float));
+
+    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b_index, d_a_index, num_elements_a_int * sizeof(int), cudaMemcpyDeviceToDevice);  // Use the same data for 'b' as they are not used
+    cudaMemcpy(d_b_positions, d_a_positions, (rows + 1) * sizeof(int), cudaMemcpyDeviceToDevice);  // Use the same data for 'b' as they are not used
+    cudaMemcpy(d_b_values, d_a_values, num_elements_a_int * sizeof(float), cudaMemcpyDeviceToDevice); // Use the same data for 'b' as they are not used
+    cudaMemset(d_result, 0, columns * columns_b * sizeof(float));
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+
+    ReuclideanSparse_gpu_atomic_float_different_blocks<<<blocksPerGrid, threadsPerBlock>>>(
+        d_a_index, d_a_positions, d_a_values,
+        d_b_index, d_b_positions, d_b_values, rows, columns, columns_b, d_result);
+
+    cudaMemcpy(float_result, d_result, columns * columns_b * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < columns * columns_b; ++i) {
+        result[i] = std::sqrt(float_result[i]);
+    }
+
+    cudaFree(d_a_index);
+    cudaFree(d_a_positions);
+    cudaFree(d_a_values);
+    cudaFree(d_b_index);
+    cudaFree(d_b_positions);
+    cudaFree(d_b_values);
+    cudaFree(d_result);
+
+    delete[] a_values;
+    delete[] float_result;
+}
+
+
+__global__ void RpearsonSparseCorr_gpu_atomic_float_different_blocks(
+    int* a_index, int* a_positions, float* a_double_values,
+    int* b_index, int* b_positions, float* b_double_values,
+    float* result, int rows, int columns, int columns_b,
+    float* squares_a, float* squares_b) {
+
+    int row_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row_index < rows) {
+        int start_column = a_positions[row_index];
+        int end_column = a_positions[row_index + 1];
+
+        int start_column_b = b_positions[row_index];
+        int end_column_b = b_positions[row_index + 1];
+
+        for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+            float value1 = a_double_values[col1_index];
+            int col1 = a_index[col1_index];
+
+            for (int col2_index = start_column_b; col2_index < end_column_b; ++col2_index) {
+                float value2 = b_double_values[col2_index];
+                int col2 = b_index[col2_index];
+
+                atomicAdd(&result[col2 * columns + col1], value1 * value2);
+            }
+        }
+
+        for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+            float value1 = a_double_values[col1_index];
+            int col1 = a_index[col1_index];
+
+            atomicAdd(&squares_a[col1], value1 * value1);
+        }
+
+        for (int col2_index = start_column_b; col2_index < end_column_b; ++col2_index) {
+            float value2 = b_double_values[col2_index];
+            int col2 = b_index[col2_index];
+
+            atomicAdd(&squares_b[col2], value2 * value2);
+        }
+    }
+}
+
+extern "C" void matrix_Pearson_sparse_distance_different_blocks(
+    int* a_index, int* a_positions, double* a_double_values,
+    int* b_index, int* b_positions, double* b_double_values,
+    double* result, int* num_rows, int* num_columns, int* num_columns_b,
+    int* num_elements_a, int* num_elements_b) {
+
+    int rows = *num_rows;
+    int columns = *num_columns;
+    int columns_b = *num_columns_b;
+    int num_elements_a_int = *num_elements_a;
+    int num_elements_b_int = *num_elements_b;
+
+    float* a_values = new float[num_elements_a_int];
+    float* b_values = new float[num_elements_b_int];
+    float* float_result = new float[columns * columns_b];
+    float* squares_a = new float[columns];
+    float* squares_b = new float[columns_b];
+
+    for (int i = 0; i < num_elements_a_int; ++i) {
+        a_values[i] = static_cast<float>(a_double_values[i]);
+    }
+
+    for (int i = 0; i < num_elements_b_int; ++i) {
+        b_values[i] = static_cast<float>(b_double_values[i]);
+    }
+
+    for (int i = 0; i < columns * columns_b; ++i) {
+        float_result[i] = 0.0f;
+    }
+
+    for (int i = 0; i < columns; ++i) {
+        squares_a[i] = 0.0f;
+    }
+
+    for (int i = 0; i < columns_b; ++i) {
+        squares_b[i] = 0.0f;
+    }
+
+    float* d_a_values;
+    float* d_b_values;
+    float* d_float_result;
+    float* d_squares_a;
+    float* d_squares_b;
+
+    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
+    cudaMalloc(&d_b_values, num_elements_b_int * sizeof(float));
+    cudaMalloc(&d_float_result, columns * columns_b * sizeof(float));
+    cudaMalloc(&d_squares_a, columns * sizeof(float));
+    cudaMalloc(&d_squares_b, columns_b * sizeof(float));
+
+    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b_values, b_values, num_elements_b_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_float_result, float_result, columns * columns_b * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_squares_a, squares_a, columns * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_squares_b, squares_b, columns_b * sizeof(float), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+
+    RpearsonSparseCorr_gpu_atomic_float_different_blocks<<<blocksPerGrid, threadsPerBlock>>>(
+        a_index, a_positions, d_a_values,
+        b_index, b_positions, d_b_values,
+        d_float_result, rows, columns, columns_b, d_squares_a, d_squares_b);
+
+    cudaMemcpy(float_result, d_float_result, columns * columns_b * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < columns * columns_b; ++i) {
+        int row_index = i / columns;
+        int column_index = i % columns;
+        result[i] = 1.0f - float_result[i] / sqrtf(squares_b[row_index]) / sqrtf(squares_a[column_index]);
+    }
+
+    cudaFree(d_a_values);
+    cudaFree(d_b_values);
+    cudaFree(d_float_result);
+    cudaFree(d_squares_a);
+    cudaFree(d_squares_b);
+
+    delete[] a_values;
+    delete[] b_values;
+    delete[] float_result;
+    delete[] squares_a;
+    delete[] squares_b;
+}
+
+
+__global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
+    int* a_index, int* a_positions, float* a_double_values,
+    int* b_index, int* b_positions, float* b_double_values,
+    float* result, int rows, int columns, float* squares) {
+
+    int row_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row_index < rows) {
+        int start_column = a_positions[row_index];
+        int end_column = a_positions[row_index + 1];
+
+        for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+            int prev_col_index = col1_index - 1;
+            int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+            int col1 = a_index[col1_index];
+            float value1 = a_double_values[col1_index];
+            squares[col1] += value1 * value1;
+
+            for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
+                int next_col_index = col2_index + 1;
+                int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
+                int col2 = a_index[col2_index];
+                float value2 = a_double_values[col2_index];
+
+                atomicAdd(&result[col1 * columns + col2], value1 * value2);
+                atomicAdd(&result[col2 * columns + col1], value1 * value2);
+            }
+        }
+    }
+}
+
+extern "C" void matrix_Pearson_sparse_distance_same_block(
+    int* a_index, int* a_positions, double* a_double_values,
+    int* b_index, int* b_positions, double* b_double_values,
+    double* result, int* num_rows, int* num_columns, int* num_elements_a) {
+
+    int rows = *num_rows;
+    int columns = *num_columns;
+    int num_elements_a_int = *num_elements_a;
+
+    float* a_values = new float[num_elements_a_int];
+    float* float_result = new float[columns * columns];
+    float* squares = new float[columns];
+
+    for (int i = 0; i < num_elements_a_int; ++i) {
+        a_values[i] = static_cast<float>(a_double_values[i]);
+    }
+
+    for (int i = 0; i < columns * columns; ++i) {
+        float_result[i] = 0.0f;
+    }
+
+    for (int i = 0; i < columns; ++i) {
+        squares[i] = 0.0f;
+    }
+
+    float* d_a_values;
+    float* d_float_result;
+    float* d_squares;
+
+    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
+    cudaMalloc(&d_float_result, columns * columns * sizeof(float));
+    cudaMalloc(&d_squares, columns * sizeof(float));
+
+    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_float_result, float_result, columns * columns * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_squares, squares, columns * sizeof(float), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+
+    RpearsonSparseCorr_gpu_atomic_float_same_block<<<blocksPerGrid, threadsPerBlock>>>(
+        a_index, a_positions, d_a_values,
+        b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
+        d_float_result, rows, columns, d_squares);
+
+    cudaMemcpy(float_result, d_float_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < columns * columns; ++i) {
+        int row_index = i / columns;
+        int column_index = i % columns;
+        result[i] = 1.0f - float_result[i] / sqrtf(squares[row_index]) / sqrtf(squares[column_index]);
+    }
+
+    cudaFree(d_a_values);
+    cudaFree(d_float_result);
+    cudaFree(d_squares);
+
+    delete[] a_values;
+    delete[] float_result;
+    delete[] squares;
+}
+
+//========================================================================================
 
 extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){
   std::ofstream RESULTFILE(*fout, std::ios::binary|std::ios::app);
