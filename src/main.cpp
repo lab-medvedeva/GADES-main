@@ -154,7 +154,7 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(
 
 //======================================================
 
-extern "C" void matrix_Euclidean_distance_different_block_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b) {
+extern "C" void matrix_Euclidean_distance_different_blocks_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b) {
   int array_size = * n * * m;
   float * array_new = new float[ * n * * m];
   for (int i = 0; i < array_size; ++i) {
@@ -201,7 +201,7 @@ extern "C" void matrix_Euclidean_distance_different_block_cpu(double* a, double*
   free(d_array2);
 }
 
-extern "C" void  matrix_Kendall_distance_different_block_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
+extern "C" void  matrix_Kendall_distance_different_blocks_cpu(double* a, double* b, double* c, int* n, int* m, int* m_b){
   int array_size = * n * * m;
   float * array_new = new float[ * n * * m];
   for (int i = 0; i < array_size; ++i) {
@@ -300,7 +300,11 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
       }
     }
   }
+    for (int i = 0; i < (*m) * (*m); ++i) {
+    c[i] = 1.0 - h_scalar[i] / sqrtf(h_prod1[i]) / sqrtf(h_prod2[i]);
 
+  }
+/*
  int j=0;
   for (int i = 0; i < (*m) * (*m); ++i) {
     // printf("%4.2f ",h_result[i]);
@@ -317,7 +321,7 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
       }
     }
   }
-
+*/
   free(h_prod1);
   free(h_prod2);
   free(h_scalar);
@@ -795,3 +799,132 @@ extern "C" void  matrix_Pearson_sparse_distance_different_blocks_cpu(
   free(squares_a);
   free(squares_b);
 }
+
+extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
+  int *a_index,
+  int *a_positions,
+  double *a_double_values,
+  int *b_index,
+  int *b_positions,
+  double *b_double_values,
+  double *result,
+  int *num_rows,
+  int *num_columns,
+  int *num_columns_b,
+  int *num_elements_a,
+  int *num_elements_b
+  /*double *result,
+  int *num_rows,
+  int *num_columns,
+  int *num_elements_a*/
+) {
+  int rows = *num_rows;
+  int columns = *num_columns;
+
+  unsigned int *h_result = new unsigned int[columns * columns];
+  std::memset(h_result, 0, columns * columns * sizeof(unsigned int));
+
+  float *a_values = new float[*num_elements_a];
+  for (int i = 0; i < *num_elements_a; ++i) {
+    a_values[i] = static_cast<float>(a_double_values[i]);
+  }
+
+  for (int row_index = 0; row_index < rows; ++row_index) {
+    int start_column = a_positions[row_index];
+    int end_column = a_positions[row_index + 1];
+
+    for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+      for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
+        int col1 = a_index[col1_index];
+        int col2 = a_index[col2_index];
+
+        float value1 = a_values[col1_index];
+        float value2 = a_values[col2_index];
+        if ((value1 - value2) * (value1 - value2) < 0) {
+          h_result[col1 * columns + col2] += 1;
+          h_result[col2 * columns + col1] += 1;
+        }
+      }
+    }
+  }
+  for (int i = 0; i < columns * columns; ++i) {
+    result[i] = static_cast<double>(h_result[i]);
+  }
+
+  delete[] h_result;
+  delete[] a_values;
+}
+
+
+extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
+  int *a_index,
+  int *a_positions,
+  double *a_double_values,
+  int *b_index,
+  int *b_positions,
+  double *b_double_values,
+  double *result,
+  int *num_rows,
+  int *num_columns,
+  int *num_columns_b,
+  int *num_elements_a,
+  int *num_elements_b
+) {
+  int rows = *num_rows;
+  int columns = *num_columns;
+  int columns_b = *num_columns_b;
+
+  unsigned int *h_result = new unsigned int[columns * columns_b];
+  std::memset(h_result, 0, columns * columns_b * sizeof(unsigned int));
+  float *a_values = new float[*num_elements_a];
+  float *b_values = new float[*num_elements_b];
+
+  for (int i = 0; i < *num_elements_a; ++i) {
+    a_values[i] = static_cast<float>(a_double_values[i]);
+  }
+
+  for (int i = 0; i < *num_elements_b; ++i) {
+    b_values[i] = static_cast<float>(b_double_values[i]);
+  }
+
+  for (int row_index = 0; row_index < rows; ++row_index) {
+    int start_column_a = a_positions[row_index];
+    int end_column_a = a_positions[row_index + 1];
+
+    int start_column_b = b_positions[row_index];
+    int end_column_b = b_positions[row_index + 1];
+    for (int col1_index_a = start_column_a; col1_index_a < end_column_a; ++col1_index_a) {
+      for (int col1_index_b = start_column_b; col1_index_b < end_column_b; ++col1_index_b) {
+        int col1_a = a_index[col1_index_a];
+        int col1_b = b_index[col1_index_b];
+
+        float value1_a = a_values[col1_index_a];
+        float value1_b = b_values[col1_index_b];
+
+        for (int col2_index_a = col1_index_a + 1; col2_index_a < end_column_a; ++col2_index_a) {
+          for (int col2_index_b = col1_index_b + 1; col2_index_b < end_column_b; ++col2_index_b) {
+            int col2_a = a_index[col2_index_a];
+            int col2_b = b_index[col2_index_b];
+
+            float value2_a = a_values[col2_index_a];
+            float value2_b = b_values[col2_index_b];
+
+            if ((value1_a - value2_a) * (value1_b - value2_b) < 0) {
+              h_result[col1_b * columns + col1_a] += 1;
+              h_result[col1_a * columns_b + col1_b] += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < columns * columns_b; ++i) {
+    result[i] = static_cast<double>(h_result[i]);
+  }
+
+  delete[] h_result;
+  delete[] a_values;
+  delete[] b_values;
+}
+

@@ -5,8 +5,10 @@ if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
        library.dynam('mtrx_cpu', package = 'HobotnicaGPU', lib.loc = NULL)
     }
 
-.C("check_gpu", PACKAGE = "mtrx")
-
+#.C("check_gpu", PACKAGE = "mtrx")
+#dyn.load("./lib/mtrx.so")
+#dyn.load("./lib/mtrx_cpu.so")
+#source("./R/mtrx.R")
 
 library(amap)
 library(HobotnicaGPU)
@@ -34,7 +36,7 @@ for (i in 1:times) {
 
     if (method == 'GPU') {
         #print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu")
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5, metric = metric,type="gpu",sparse=T)
         #print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         #print(metric)

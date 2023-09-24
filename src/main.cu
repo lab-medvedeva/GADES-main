@@ -669,93 +669,106 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
 //' @param n,m,m_b Boundary values.
 //' @export
 //'`
-__global__ void matrix_Euclidean_sparse_distance_same_block_gpu(
-  int *a_index,
-  int *a_positions,
-  float *a_values,  // Use float instead of double for GPU calculations
-  float *result,
-  int num_rows,
-  int num_columns
-) {
-  int row_index = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void ReuclideanSparse_gpu_atomic_float_same_block(
+    int* a_index, int* a_positions, float* a_double_values,
+    int rows, int columns, float* result) {
 
-  if (row_index < num_rows) {
-    int start_column = a_positions[row_index];
-    int end_column = a_positions[row_index + 1];
+    int row_index = blockIdx.x * blockDim.x + threadIdx.x;
 
-    for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
-      for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
-        int prev_col_index = col1_index - 1;
-        int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+    if (row_index < rows) {
+        int start_column = a_positions[row_index];
+        int end_column = a_positions[row_index + 1];
 
-        int next_col_index = col2_index + 1;
-        int next_col = (next_col_index < end_column) ? a_index[next_col_index] : num_columns;
+        for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
 
-        int col1 = a_index[col1_index];
-        int col2 = a_index[col2_index];
+            for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
+                int prev_col_index = col1_index - 1;
+                int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
 
-        float value1 = a_values[col1_index];
-        float value2 = a_values[col2_index];
+                int next_col_index = col2_index + 1;
+                int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
 
-        for (int left = prev_col + 1; left < col1; ++left) {
-          atomicAdd(&result[left * num_columns + col2], value2 * value2);
-          atomicAdd(&result[col2 * num_columns + left], value2 * value2);
+                int col1 = a_index[col1_index];
+                int col2 = a_index[col2_index];
+
+                float value1 = a_double_values[col1_index];
+                float value2 = a_double_values[col2_index];
+
+                for (int left = prev_col + 1; left < col1; ++left) {
+                    atomicAdd(&result[left * columns + col2], value2 * value2);
+                    atomicAdd(&result[col2 * columns + left], value2 * value2);
+                }
+
+                for (int right = col2 + 1; right < next_col; ++right) {
+                    atomicAdd(&result[right * columns + col1], value1 * value1);
+                    atomicAdd(&result[col1 * columns + right], value1 * value1);
+                }
+		// using diff calculation directcly passing to n,m col directly
+                float diff = (value1 - value2) * (value1 - value2);
+                atomicAdd(&result[col1 * columns + col2], diff);
+                atomicAdd(&result[col2 * columns + col1], diff);
+            }
         }
-
-        for (int right = col2 + 1; right < next_col; ++right) {
-          atomicAdd(&result[right * num_columns + col1], value1 * value1);
-          atomicAdd(&result[col1 * num_columns + right], value1 * value1);
-        }
-
-        atomicAdd(&result[col1 * num_columns + col2], (value1 - value2) * (value1 - value2));
-        atomicAdd(&result[col2 * num_columns + col1], (value1 - value2) * (value1 - value2));
-      }
     }
-  }
 }
 
-extern "C" void matrix_Euclidean_sparse_distance_same_block_gpu_wrapper(
-  int *a_index,
-  int *a_positions,
-  double *a_double_values,
-  double *result,
-  int num_rows,
-  int num_columns,
-  int num_elements_a
-) {
-  float *a_values = new float[num_elements_a];
-  for (int i = 0; i < num_elements_a; ++i) {
-    a_values[i] = static_cast<float>(a_double_values[i]);
-  }
+extern "C" void matrix_Euclidean_sparse_distance_same_block(
+    int* a_index, int* a_positions, double* a_double_values,
+    int* b_index, int* b_positions, double* b_double_values,
+    double* result, int* num_rows, int* num_columns, int* num_columns_b,
+    int* num_elements_a, int* num_elements_b) {
 
-  float *d_a_values, *d_result;
-  int *d_a_index, *d_a_positions;
+    int rows = *num_rows;
+    int columns = *num_columns;
+    int num_elements_a_int = *num_elements_a;
 
-  cudaMalloc(&d_a_values, num_elements_a * sizeof(float));
-  cudaMalloc(&d_result, num_columns * num_columns * sizeof(float));
-  cudaMalloc(&d_a_index, num_elements_a * sizeof(int));
-  cudaMalloc(&d_a_positions, (num_rows + 1) * sizeof(int));
+    float* a_values = new float[num_elements_a_int];
+    float* float_result = new float[columns * columns];
 
-  cudaMemcpy(d_a_values, a_values, num_elements_a * sizeof(float), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_a_index, a_index, num_elements_a * sizeof(int), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_a_positions, a_positions, (num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+    for (int i = 0; i < num_elements_a_int; ++i) {
+        a_values[i] = static_cast<float>(a_double_values[i]);
+    }
 
-  int threadsPerBlock = 256;
-  int numBlocks = (num_rows + threadsPerBlock - 1) / threadsPerBlock;
+    for (int i = 0; i < columns * columns; ++i) {
+        float_result[i] = 0.0f;
+    }
 
-  matrix_Euclidean_sparse_distance_same_block_gpu<<<numBlocks, threadsPerBlock>>>(
-    d_a_index, d_a_positions, d_a_values, d_result, num_rows, num_columns
-  );
+    int* d_a_index;
+    int* d_a_positions;
+    float* d_a_values;
+    float* d_result;
 
-  cudaMemcpy(result, d_result, num_columns * num_columns * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
+    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
+    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
+    cudaMalloc(&d_result, columns * columns * sizeof(float));
 
-  cudaFree(d_a_values);
-  cudaFree(d_result);
-  cudaFree(d_a_index);
-  cudaFree(d_a_positions);
+    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemset(d_result, 0, columns * columns * sizeof(float));
 
-  delete[] a_values;
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+
+    ReuclideanSparse_gpu_atomic_float_same_block<<<blocksPerGrid, threadsPerBlock>>>(
+        d_a_index, d_a_positions, d_a_values, rows, columns, d_result);
+
+    cudaMemcpy(float_result, d_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < columns * columns; ++i) {
+        result[i] = std::sqrt(float_result[i]);
+    }
+
+    cudaFree(d_a_index);
+    cudaFree(d_a_positions);
+    cudaFree(d_a_values);
+    cudaFree(d_result);
+
+    delete[] a_values;
+    delete[] float_result;
 }
+
 //====================================TESTING SPARSE METHODS==============================
 __global__ void ReuclideanSparse_gpu_atomic_float_different_blocks(
     int* a_index, int* a_positions, float* a_double_values,
@@ -817,6 +830,7 @@ extern "C" void matrix_Euclidean_sparse_distance_different_blocks(
     int columns = *num_columns;
     int columns_b = *num_columns_b;
     int num_elements_a_int = *num_elements_a;
+    int num_elements_b_int = *num_elements_b;
 
     float* a_values = new float[num_elements_a_int];
     float* float_result = new float[columns * columns_b];
@@ -842,7 +856,7 @@ extern "C" void matrix_Euclidean_sparse_distance_different_blocks(
     cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
     cudaMalloc(&d_b_index, num_elements_a_int * sizeof(int));  // Use the same size as 'a' since 'b' is not used in this version
     cudaMalloc(&d_b_positions, (rows + 1) * sizeof(int));       // Use the same size as 'a' since 'b' is not used in this version
-    cudaMalloc(&d_b_values, num_elements_a_int * sizeof(float)); // Use the same size as 'a' since 'b' is not used in this version
+    cudaMalloc(&d_b_values, num_elements_b_int * sizeof(float)); // Use the same size as 'a' since 'b' is not used in this version
     cudaMalloc(&d_result, columns * columns_b * sizeof(float));
 
     cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
@@ -1010,7 +1024,6 @@ extern "C" void matrix_Pearson_sparse_distance_different_blocks(
 
 __global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
     int* a_index, int* a_positions, float* a_double_values,
-    int* b_index, int* b_positions, float* b_double_values,
     float* result, int rows, int columns, float* squares) {
 
     int row_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1024,7 +1037,7 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
             int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
             int col1 = a_index[col1_index];
             float value1 = a_double_values[col1_index];
-            squares[col1] += value1 * value1;
+            atomicAdd(&squares[col1], value1 * value1);
 
             for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
                 int next_col_index = col2_index + 1;
@@ -1081,7 +1094,7 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
 
     RpearsonSparseCorr_gpu_atomic_float_same_block<<<blocksPerGrid, threadsPerBlock>>>(
         a_index, a_positions, d_a_values,
-        b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
+        //b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
         d_float_result, rows, columns, d_squares);
 
     cudaMemcpy(float_result, d_float_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
