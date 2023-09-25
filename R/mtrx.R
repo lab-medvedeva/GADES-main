@@ -111,8 +111,6 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     	)$dist_matrix
     }
     end_t = as.numeric(Sys.time()) * 1000000
-    print('KERNEL CALL')
-    print(end_t - st_t)
     dim(result) <- c(batch_a_size, batch_b_size)
 
     return (
@@ -164,7 +162,7 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         }
        #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    print(fn_name)
+    #print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 

@@ -979,29 +979,47 @@ extern "C" void matrix_Pearson_sparse_distance_different_blocks(
     float* d_float_result;
     float* d_squares_a;
     float* d_squares_b;
+    int* d_a_index;
+    int* d_b_index;
+    int* d_a_positions;
+    int* d_b_positions;
 
     cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
     cudaMalloc(&d_b_values, num_elements_b_int * sizeof(float));
     cudaMalloc(&d_float_result, columns * columns_b * sizeof(float));
     cudaMalloc(&d_squares_a, columns * sizeof(float));
     cudaMalloc(&d_squares_b, columns_b * sizeof(float));
+    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
+    cudaMalloc(&d_b_positions, (rows + 1) * sizeof(int));
+    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
+    cudaMalloc(&d_b_index, num_elements_b_int * sizeof(int));
 
     cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_b_values, b_values, num_elements_b_int * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_float_result, float_result, columns * columns_b * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_squares_a, squares_a, columns * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_squares_b, squares_b, columns_b * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b_index, a_index, num_elements_b_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
     int threadsPerBlock = 256;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
 
     RpearsonSparseCorr_gpu_atomic_float_different_blocks<<<blocksPerGrid, threadsPerBlock>>>(
-        a_index, a_positions, d_a_values,
-        b_index, b_positions, d_b_values,
+        d_a_index, d_a_positions, d_a_values,
+        d_b_index, d_b_positions, d_b_values,
         d_float_result, rows, columns, columns_b, d_squares_a, d_squares_b);
 
     cudaMemcpy(float_result, d_float_result, columns * columns_b * sizeof(float), cudaMemcpyDeviceToHost);
 
+    cudaMemcpy(squares_a, d_squares_a, columns * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(squares_b, d_squares_b, columns_b * sizeof(float), cudaMemcpyDeviceToHost);
+
+    // for (int i = 0; i < 5; ++i) {
+    //   std::cerr << squares_a[i] << " " << squares_b[i] << std::endl;
+    // }
     for (int i = 0; i < columns * columns_b; ++i) {
         int row_index = i / columns;
         int column_index = i % columns;
@@ -1013,6 +1031,10 @@ extern "C" void matrix_Pearson_sparse_distance_different_blocks(
     cudaFree(d_float_result);
     cudaFree(d_squares_a);
     cudaFree(d_squares_b);
+    cudaFree(d_a_index);
+    cudaFree(d_b_index);
+    cudaFree(d_a_positions);
+    cudaFree(d_b_positions);
 
     delete[] a_values;
     delete[] b_values;
@@ -1027,24 +1049,26 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
     float* result, int rows, int columns, float* squares) {
 
     int row_index = blockIdx.x * blockDim.x + threadIdx.x;
-
+    // printf("%d %d\n", row_index, rows);
     if (row_index < rows) {
+        // printf("Inside kernel\n");
         int start_column = a_positions[row_index];
         int end_column = a_positions[row_index + 1];
-
+        // printf("Test: %d %d\n", start_column, end_column);
         for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+            // printf("Here\n");
             int prev_col_index = col1_index - 1;
             int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
             int col1 = a_index[col1_index];
             float value1 = a_double_values[col1_index];
             atomicAdd(&squares[col1], value1 * value1);
-
+            
             for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
                 int next_col_index = col2_index + 1;
                 int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
                 int col2 = a_index[col2_index];
                 float value2 = a_double_values[col2_index];
-
+                
                 atomicAdd(&result[col1 * columns + col2], value1 * value2);
                 atomicAdd(&result[col2 * columns + col1], value1 * value2);
             }
@@ -1053,9 +1077,19 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
 }
 
 extern "C" void matrix_Pearson_sparse_distance_same_block(
-    int* a_index, int* a_positions, double* a_double_values,
-    int* b_index, int* b_positions, double* b_double_values,
-    double* result, int* num_rows, int* num_columns, int* num_elements_a) {
+    int* a_index,
+    int* a_positions,
+    double* a_double_values,
+    int* b_index,
+    int* b_positions,
+    double* b_double_values,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* num_columns_b,
+    int* num_elements_a,
+    int* num_elements_b
+) {
 
     int rows = *num_rows;
     int columns = *num_columns;
@@ -1080,34 +1114,57 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
     float* d_a_values;
     float* d_float_result;
     float* d_squares;
+    int* d_a_index;
+    int* d_a_positions;
+
+    // std::cout << rows << std::endl;
+    // for (int i = 0; i < rows; ++i) {
+    //   std::cout << a_positions[i] << " ";
+    // }
+    // std::cout << std::endl;
 
     cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
     cudaMalloc(&d_float_result, columns * columns * sizeof(float));
     cudaMalloc(&d_squares, columns * sizeof(float));
+    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
+    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
 
     cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_float_result, float_result, columns * columns * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_squares, squares, columns * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
     int threadsPerBlock = 256;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+    
 
     RpearsonSparseCorr_gpu_atomic_float_same_block<<<blocksPerGrid, threadsPerBlock>>>(
-        a_index, a_positions, d_a_values,
+        d_a_index, d_a_positions, d_a_values,
         //b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
         d_float_result, rows, columns, d_squares);
 
     cudaMemcpy(float_result, d_float_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(squares, d_squares, columns * sizeof(float), cudaMemcpyDeviceToHost);
 
+    // for (int i = 0; i < columns; ++i) {
+    //   std::cerr << squares[i] << " ";
+    // }
+
+    // std::cerr << std::endl;
     for (int i = 0; i < columns * columns; ++i) {
         int row_index = i / columns;
         int column_index = i % columns;
-        result[i] = 1.0f - float_result[i] / sqrtf(squares[row_index]) / sqrtf(squares[column_index]);
+        if (row_index != column_index) {
+            result[i] = 1.0f - float_result[i] / sqrtf(squares[row_index]) / sqrtf(squares[column_index]);
+        }
     }
 
     cudaFree(d_a_values);
     cudaFree(d_float_result);
     cudaFree(d_squares);
+    cudaFree(d_a_index);
+    cudaFree(d_a_positions);
 
     delete[] a_values;
     delete[] float_result;

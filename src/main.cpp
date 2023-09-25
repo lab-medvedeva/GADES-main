@@ -628,6 +628,7 @@ extern "C" void matrix_Pearson_sparse_distance_same_block_cpu(
     squares[i] = 0.0f;
   }
 
+
   for (int row_index = 0; row_index < rows; ++row_index) {
     int start_column = a_positions[row_index];
     int end_column = a_positions[row_index + 1];
@@ -676,11 +677,14 @@ extern "C" void matrix_Pearson_sparse_distance_same_block_cpu(
       }
     }
   }
-
   for (int i = 0; i < columns * columns; ++i) {
     int row_index = i / columns;
     int column_index = i % columns;
-    result[i] = 1.0f - float_result[i] / std::sqrt(squares[row_index]) / std::sqrt(squares[column_index]);
+    if (row_index != column_index) {
+        result[i] = 1.0f - float_result[i] / std::sqrt(squares[row_index]) / std::sqrt(squares[column_index]);
+    } else {
+        result[i] = 0.0f;
+    }
   }
   
   free(float_result);
@@ -746,28 +750,11 @@ extern "C" void  matrix_Pearson_sparse_distance_different_blocks_cpu(
 
       for (int col2_index = start_column_b; col2_index < end_column_b; ++col2_index) {
         // std::cout << col1_index << " " << start_column << " " << end_column << " " << col2_index << std::endl;
-        int col2 = b_index[col2_index];
-
-        
+        int col2 = b_index[col2_index];       
         float value2 = b_values[col2_index];
-        
-        // if (col2 < columns_b) {
-        //   for (int left = prev_col + 1; left < col1; ++left) {
-        //     float_result[col2 * columns + left] += value2 * value2;
-        //   }
-        // }
-        // if (col1 < columns) {
-        //   for (int left = prev_col2 + 1; left < col2; ++left) {
-        //     float_result[left * columns + col1] += value1 * value1;
-        //   }
-        // }
 
         float_result[col2 * columns + col1] += value1 * value2;
-        
-        // std::cout << "Done" << std::endl;
-        // if (col1 + col2 == 1) {
-        //     std::cout << "D" << row_index << " " << col1 << " " << col2 << " " << value1 - value2 << std::endl;
-        // }
+
       }
     }
 

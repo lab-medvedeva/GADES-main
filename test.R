@@ -61,8 +61,8 @@ for (i in 1:times) {
 
 print('Sparse Matrix')
 
-print(mean(as.matrix(measurements)))
-print(sd(as.matrix(measurements)))
+print(mean(as.matrix(measurements[1:times])))
+print(sd(as.matrix(measurements[1:times])))
 # print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
@@ -99,8 +99,8 @@ for (i in 1:times) {
     #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
 print('Dense Matrix')
-print(mean(as.matrix(measurements)))
-print(sd(as.matrix(measurements)))
+print(mean(as.matrix(measurements[1:times])))
+print(sd(as.matrix(measurements[1:times])))
 # print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
