@@ -36,12 +36,12 @@ for (i in 1:times) {
 
     if (method == 'GPU') {
         #print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5, metric = metric,type="gpu",sparse=T)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu",sparse=T)
         #print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         #print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5, metric = metric, type="cpu", sparse=T)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric, type="cpu", sparse=T)
         # print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
@@ -61,8 +61,8 @@ for (i in 1:times) {
 
 print('Sparse Matrix')
 
-print(mean(as.matrix(measurements[1:times])))
-print(sd(as.matrix(measurements[1:times])))
+print(mean(as.matrix(measurements[2:times])))
+print(sd(as.matrix(measurements[2:times])))
 # print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
@@ -99,8 +99,8 @@ for (i in 1:times) {
     #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
 print('Dense Matrix')
-print(mean(as.matrix(measurements[1:times])))
-print(sd(as.matrix(measurements[1:times])))
+print(mean(as.matrix(measurements[2:times])))
+print(sd(as.matrix(measurements[2:times])))
 # print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')

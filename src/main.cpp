@@ -706,7 +706,6 @@ extern "C" void  matrix_Pearson_sparse_distance_different_blocks_cpu(
   int *num_elements_a,
   int *num_elements_b
 ){
-  std::cerr << "Called" << std::endl;
   int rows = *num_rows;
   int columns = *num_columns;
   int columns_b = *num_columns_b;
@@ -782,14 +781,6 @@ extern "C" void  matrix_Pearson_sparse_distance_different_blocks_cpu(
       squares_b[col2] += value2 * value2;
     }
   }
-
-  for (int i = 0; i < 5; ++i) {
-    std::cerr << squares_a[i] << " " << squares_b[i] << std::endl;
-  }
-
-  // for (int i = 0; i < *num_elements_b; ++i) {
-  //   std::cerr << "B: " << i << " " << b_values[i] << " " << b_index[i] << std::endl;
-  // }
 
   for (int i = 0; i < columns * columns_b; ++i) {
     int row_index = i / columns;
