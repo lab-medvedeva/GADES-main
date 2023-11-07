@@ -33,15 +33,27 @@ make
 ```R
 library(HobotnicaGPU)
 
-matrix <- as.matrix(read.table('matrix.csv', header=T, row.names = 1, sep=","))
-dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F)
+mtx<-matrix(runif(100000),nrow=100)
+dense.mtx <- as.matrix(read.table(mtx, header=T, row.names = 1, sep=","))
+dist.matrix <- mtrx_distance(dense.mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F)
 ```
 
 ### Sparse mode
 ```R
 library(HobotnicaGPU)
 
+
+matrix <- rsparsematrix(nrow, ncol, density
+
 matrix <- Matrix::readMM('./matrix.mtx')
+dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
+```
+
+### Sparse mode - GPU
+```R
+library(HobotnicaGPU)
+library(Matrix)
+matrix <- Matrix::readMM(matrix.mtx')
 dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
 ```
 
