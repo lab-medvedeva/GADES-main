@@ -35,7 +35,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
 	}
     } else {
         if (metric == 'kendall') {
-            fn_name <- "matrix_Kendall_distance_different_blocks"
+            fn_name <- glue("matrix_Kendall{postfix}_distance_different_blocks")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_different_blocks")
         } else if(metric =='pearson') {

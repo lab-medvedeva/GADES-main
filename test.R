@@ -35,7 +35,7 @@ for (i in 1:times) {
 
     if (method == 'GPU') {
         #print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu",sparse=T)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size , metric = metric,type="gpu",sparse=T)
         #print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         print(metric)
