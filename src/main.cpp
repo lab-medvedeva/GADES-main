@@ -2,9 +2,10 @@
 #include <iostream>
 #include <fstream>
 #include <R.h>
-#include<stdio.h>
+#include <stdio.h>
 #include <cstring>
-#include<math.h>
+#include <math.h>
+#include <cassert>
 //=========================================
 
 //Naive Implementation of Euclidean_distance_matrix (BruteForce)
@@ -816,38 +817,177 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   int rows = *num_rows;
   int columns = *num_columns;
 
-  unsigned int *h_result = new unsigned int[columns * columns];
-  std::memset(h_result, 0, columns * columns * sizeof(unsigned int));
+  std::cout << columns << std::endl;
+  int *concordant = new int[columns * columns];
+  int *disconcordant = new int[columns * columns];
+  std::memset(concordant, 0, columns * columns * sizeof(int));
+  std::memset(disconcordant, 0, columns * columns * sizeof(int));
 
   float *a_values = new float[*num_elements_a];
   for (int i = 0; i < *num_elements_a; ++i) {
     a_values[i] = static_cast<float>(a_double_values[i]);
   }
 
+  bool* left_thresholds = new bool[columns];
+  
+
   for (int row_index = 0; row_index < rows; ++row_index) {
-    int start_column = a_positions[row_index];
-    int end_column = a_positions[row_index + 1];
+    for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {
+      for (int i = 0; i < columns; ++i) {
+        left_thresholds[i] = false;
+      }
+      int start_column = a_positions[row_index];
+      int end_column = a_positions[row_index + 1];
 
-    for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
-      for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
+      int start_column_b = a_positions[row_jndex];
+      int end_column_b = a_positions[row_jndex + 1];
+      bool left_threshold_selected = false;
+      bool right_threshold_selected = false;
+      int right_down1_threshold = start_column_b;
+      int left_down1_threshold = start_column_b;
+      int left_down2_threshold = start_column_b;
+      int right_down2_threshold = start_column_b;
+      bool left_activated = false;
+      bool right_activated = false;
+      std::cout << row_index << " " << row_jndex << " OK" << std::endl;
+      for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+        int prev_col_index = col1_index - 1;
+        int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
         int col1 = a_index[col1_index];
-        int col2 = a_index[col2_index];
-
         float value1 = a_values[col1_index];
-        float value2 = a_values[col2_index];
-        if ((value1 - value2) * (value1 - value2) < 0) {
-          h_result[col1 * columns + col2] += 1;
-          h_result[col2 * columns + col1] += 1;
+        
+
+        while (right_down1_threshold < end_column_b && a_index[right_down1_threshold] < col1) {
+          right_down1_threshold += 1;
+        }
+
+        if (right_down1_threshold < end_column_b && a_index[right_down1_threshold] == col1) {
+          left_activated = true;
+        }
+        if (right_down1_threshold < end_column_b && a_index[right_down1_threshold] == col1) {
+          left_down2_threshold = right_down1_threshold + 1;
+          right_activated = true;
+        } else {
+          left_down2_threshold = right_down1_threshold;
+        }
+
+        right_down2_threshold = left_down2_threshold;
+        for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
+          int col2 = a_index[col2_index];
+          float value2 = a_values[col2_index];
+          int next_col_index = col2_index + 1;
+          int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
+
+          while (right_down2_threshold < end_column_b && a_index[right_down2_threshold] < next_col) {
+              right_down2_threshold += 1;
+          }
+          if (left_down1_threshold < end_column_b && !left_thresholds[left_down1_threshold]) {
+            left_thresholds[left_down1_threshold] = true;
+            for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+                for (int right = left + 1; right < right_down1_threshold; ++right) {
+                  float product = a_values[left] * a_values[right];
+                  if (product < 0) {
+                    disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                    disconcordant[a_index[right] * columns + a_index[left]] += 1;
+                  } else {
+                    concordant[a_index[left] * columns + a_index[right]] += 1;
+                    concordant[a_index[right] * columns + a_index[left]] += 1;
+                  }
+                }
+            }
+          }
+          
+          if (left_down2_threshold < end_column_b && !left_thresholds[left_down2_threshold]) {
+            left_thresholds[left_down2_threshold] = true;
+            for (int left = left_down2_threshold; left < right_down2_threshold; left++) {
+                for (int right = left + 1; right < right_down2_threshold; ++right) {
+                  float product = a_values[left] * a_values[right];
+                  if (product < 0) {
+                    disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                    disconcordant[a_index[right] * columns + a_index[left]] += 1;
+                  } else {
+                    concordant[a_index[left] * columns + a_index[right]] += 1;
+                    concordant[a_index[right] * columns + a_index[left]] += 1;
+                  }
+                }
+            }
+          }
+          
+          for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+                for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+                  float product = a_values[left] * a_values[right];
+                  if (product < 0) {
+                    disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                    disconcordant[a_index[right] * columns + a_index[left]] += 1;
+                  } else {
+                    concordant[a_index[left] * columns + a_index[right]] += 1;
+                    concordant[a_index[right] * columns + a_index[left]] += 1;
+                  }
+                }
+            }
+          
+          float left_value = (left_activated) ? a_values[right_down1_threshold] : 0;
+          float right_value = (right_activated) ? a_values[left_down2_threshold - 1] : 0;
+          
+          float left_diff = left_value - a_values[col1_index];
+          float right_diff = right_value - a_values[col2_index];
+          float product = left_diff * right_diff;
+          if (product > 0) {
+              concordant[col1 * columns + col2] += 1;
+              concordant[col2 * columns + col1] += 1;
+          } else if (product < 0) {
+              disconcordant[col1 * columns + col2] += 1;
+              disconcordant[col2 * columns + col1] += 1;
+          }
+          
+          for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+            product = left_diff * a_values[right];
+            if (product < 0) {
+              disconcordant[col1 * columns + a_index[right]] += 1;
+              disconcordant[a_index[right] * columns + col1] += 1;
+            } else if (product > 0) {
+              concordant[col1 * columns + a_index[right]] += 1;
+              concordant[a_index[right] * columns + col1] += 1;
+            }
+          }
+              
+          for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+            // std::cout << a_index[left] << " " << a_index[col2_index] << std::endl;
+            product = right_diff * a_values[left];
+            if (product < 0) {
+                disconcordant[a_index[left] * columns + col2] += 1;
+                disconcordant[col2 * columns + a_index[left]] += 1;
+            } else if (product > 0) {
+                concordant[a_index[left]* columns + col2] += 1;
+                concordant[col2 * columns + a_index[left]] += 1;
+            }
+          }
+
+          right_activated = false;
+          while (left_down2_threshold < end_column_b && a_index[left_down2_threshold] <= next_col) {
+              if (a_index[left_down2_threshold] == next_col) {
+                right_activated = true;
+              }
+              left_down2_threshold += 1;
+          }
+
+        }
+        
+        while (left_down1_threshold < end_column_b && a_index[left_down1_threshold] <= col1) {
+          left_down1_threshold += 1;
         }
       }
     }
   }
   for (int i = 0; i < columns * columns; ++i) {
-    result[i] = static_cast<double>(h_result[i]);
+    result[i] = static_cast<double>((concordant[i] - disconcordant[i]) * 2.0f / rows / (rows - 1));
   }
 
-  delete[] h_result;
+  delete[] concordant;
+  delete[] disconcordant;
+  delete[] left_thresholds;
   delete[] a_values;
+  std::cout << "After remove" << std::endl;
 }
 
 
@@ -870,57 +1010,158 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
   int columns = *num_columns;
   int columns_b = *num_columns_b;
 
-  unsigned int *h_result = new unsigned int[columns * columns_b];
-  std::memset(h_result, 0, columns * columns_b * sizeof(unsigned int));
+  int *concordant = new int[columns * columns_b];
+  int *disconcordant = new int[columns * columns_b];
+  std::memset(concordant, 0, columns * columns_b * sizeof(int));
+  std::memset(disconcordant, 0, columns * columns_b * sizeof(int));
   float *a_values = new float[*num_elements_a];
   float *b_values = new float[*num_elements_b];
 
+  // std::cout << "VALUES A" << std::endl;
   for (int i = 0; i < *num_elements_a; ++i) {
     a_values[i] = static_cast<float>(a_double_values[i]);
+    // std::cout << a_values[i] << " "; 
   }
+  // std::cout << std::endl;
+  // std::cout << "POSITIONS A" << std::endl;
+  //  for (int i = 0; i < *num_elements_a; ++i) {
+  //   std::cout << a_index[i] << " "; 
+  // }
+
+  // std::cout << std::endl;
 
   for (int i = 0; i < *num_elements_b; ++i) {
     b_values[i] = static_cast<float>(b_double_values[i]);
   }
 
   for (int row_index = 0; row_index < rows; ++row_index) {
-    int start_column_a = a_positions[row_index];
-    int end_column_a = a_positions[row_index + 1];
+    for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {
+      int start_column = a_positions[row_index];
+      int end_column = a_positions[row_index + 1];
+      int start_column_down = a_positions[row_jndex];
+      int end_column_down = a_positions[row_jndex + 1];
 
-    int start_column_b = b_positions[row_index];
-    int end_column_b = b_positions[row_index + 1];
-    for (int col1_index_a = start_column_a; col1_index_a < end_column_a; ++col1_index_a) {
-      for (int col1_index_b = start_column_b; col1_index_b < end_column_b; ++col1_index_b) {
-        int col1_a = a_index[col1_index_a];
-        int col1_b = b_index[col1_index_b];
+      int start_column_b = b_positions[row_index];
+      int end_column_b = b_positions[row_index + 1];
+      int start_column_down_b = b_positions[row_jndex];
+      int end_column_down_b = b_positions[row_jndex + 1];
+      bool left_threshold_selected = false;
+      bool right_threshold_selected = false;
+      int right_down1_threshold = start_column_down;
+      int left_down1_threshold = start_column_down;
+      int left_down2_threshold = start_column_down_b;
+      int right_down2_threshold = start_column_down_b;
+      bool left_activated = false;
+      bool right_activated = false;
+      // std::cout << "BEFORE THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
 
-        float value1_a = a_values[col1_index_a];
-        float value1_b = b_values[col1_index_b];
+      for (int col1_index = start_column; col1_index <= end_column; ++col1_index) {
+        int prev_col_index = col1_index - 1;
+        int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+        int col1 = (col1_index < end_column) ? a_index[col1_index]: columns;
+        float value1 = (col1_index < end_column) ? a_values[col1_index]: 0;
+        
+        // std::cout << right_down1_threshold << " " << end_column_down << " " << a_index[right_down1_threshold] << " " << col1 << std::endl;
+        while (right_down1_threshold < end_column_down && a_index[right_down1_threshold] < col1) {
+          right_down1_threshold += 1;
+        }
+        // std::cout << right_down1_threshold << std::endl;
 
-        for (int col2_index_a = col1_index_a + 1; col2_index_a < end_column_a; ++col2_index_a) {
-          for (int col2_index_b = col1_index_b + 1; col2_index_b < end_column_b; ++col2_index_b) {
-            int col2_a = a_index[col2_index_a];
-            int col2_b = b_index[col2_index_b];
+        if (right_down1_threshold < end_column_down && a_index[right_down1_threshold] == col1) {
+          left_activated = true;
+        }
+        // if (right_down1_threshold < end_column_down && a_index[right_down1_threshold] == col1) {
+        //   left_down2_threshold = right_down1_threshold + 1;
+        //   right_activated = true;
+        // } else {
+        //   left_down2_threshold = right_down1_threshold;
+        // }
 
-            float value2_a = a_values[col2_index_a];
-            float value2_b = b_values[col2_index_b];
+        int left_down2_threshold = start_column_down_b;
+        int right_down2_threshold = start_column_down_b;
+        right_activated = false;
+        for (int col2_index = start_column_b; col2_index < end_column_b; ++col2_index) {
+          int col2 = b_index[col2_index];
+          float value2 = b_values[col2_index];
+          int next_col_index = col2_index + 1;
+          int next_col = (next_col_index < end_column_b) ? b_index[next_col_index] : columns_b;
 
-            if ((value1_a - value2_a) * (value1_b - value2_b) < 0) {
-              h_result[col1_b * columns + col1_a] += 1;
-              h_result[col1_a * columns_b + col1_b] += 1;
+
+          while (right_down2_threshold < end_column_down_b && b_index[right_down2_threshold] < next_col) {
+              right_down2_threshold += 1;
+          }
+          
+          for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+                for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+                  float product = a_values[left] * b_values[right];
+                  assert(b_index[right] < columns_b);
+                  if (product < 0) {
+                    disconcordant[b_index[right] * columns + a_index[left]] += 1;
+                  } else {
+                    concordant[b_index[right] * columns + a_index[left]] += 1;
+                  }
+                }
+            }
+          // std::cout << "COL" << col1 << " " << col2 << std::endl;
+          // std::cout << "THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
+          
+          float left_value = (left_activated) ? a_values[right_down1_threshold] : 0;
+          float right_value = (right_activated) ? b_values[left_down2_threshold - 1] : 0;
+          
+          
+          float right_diff = right_value - value2;
+          
+          float left_diff = left_value - value1;
+          float product = left_diff * right_diff;
+          if (product > 0) {
+              concordant[col2 * columns + col1] += 1;
+          } else if (product < 0) {
+              disconcordant[col2 * columns + col1] += 1;
+          }
+          
+          for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+            product = left_diff * b_values[right];
+            if (product < 0) {
+              disconcordant[b_index[right] * columns + col1] += 1;
+            } else if (product > 0) {
+              concordant[b_index[right] * columns + col1] += 1;
             }
           }
+              
+          for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+            product = right_diff * a_values[left];
+            if (product < 0) {
+                disconcordant[col2 * columns + a_index[left]] += 1;
+            } else if (product > 0) {
+                concordant[col2 * columns + a_index[left]] += 1;
+            }
+          }
+
+          right_activated = false;
+          while (left_down2_threshold < end_column_down_b && b_index[left_down2_threshold] <= next_col) {
+              if (b_index[left_down2_threshold] == next_col) {
+                right_activated = true;
+              }
+              left_down2_threshold += 1;
+          }
+
+        }
+        // std::cout << "Here" << " " << left_down1_threshold << " " << end_column_down << std::endl;
+        while (left_down1_threshold < end_column_down && a_index[left_down1_threshold] <= col1) {
+          // std::cout << "Inside" << std::endl;
+          left_down1_threshold += 1;
         }
       }
     }
   }
-
   for (int i = 0; i < columns * columns_b; ++i) {
-    result[i] = static_cast<double>(h_result[i]);
+    result[i] = static_cast<double>((concordant[i] - disconcordant[i]) * 2.0f / rows / (rows - 1)); 
   }
 
-  delete[] h_result;
+  delete[] concordant;
+  delete[] disconcordant;
   delete[] a_values;
   delete[] b_values;
+  std::cout << "Gone" << std::endl;
 }
 

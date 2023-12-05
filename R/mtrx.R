@@ -162,13 +162,15 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         }
        #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    #print(fn_name)
+    print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
     first_start <- first_index + 1
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
+    print(dim(count_matrix))
+    print(c(second_start:second_right_border))
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
 
     batch_a_size <- first_right_border - first_index
@@ -278,11 +280,8 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
             correlation_matrix <- result$correlation_matrix
             result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
             end_t <- as.numeric(Sys.time()) * 1000000
-            # print(end_t - st_t)
         }
     } 
-    
-
     return (result_overall)
   }
   else{

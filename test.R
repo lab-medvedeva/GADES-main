@@ -20,7 +20,7 @@ datain = args[1]
 method = args[2]
 times = strtoi(args[3])
 metric = args[4]
-
+batch_size = strtoi(args[5])
 
 print('Reading table')
 
@@ -39,9 +39,9 @@ for (i in 1:times) {
         distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu",sparse=T)
         #print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
-        #print(metric)
+        print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric, type="cpu", sparse=T)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size, metric = metric, type="cpu", sparse=T)
         # print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
@@ -66,7 +66,7 @@ print(sd(as.matrix(measurements[2:times])))
 # print(as.matrix(measurements))
 print('Matrix')
 #write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
-print(distMatrix_mtrx[1:8, 1:8])
+print(distMatrix_mtrx[1:11, 1:11])
 
 measurements <- numeric(times)
 
@@ -95,6 +95,7 @@ for (i in 1:times) {
     end_time <- as.numeric(Sys.time()) * 1000000
 
     measurements[i] <- end_time - st_t
+    print(measurements[i])
     gc()
     #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
