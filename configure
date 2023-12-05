@@ -16,7 +16,7 @@ mkdir -p build && cd build
 pwd
 ls ../../
 cmake ../../ \
-  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_SHARED_LIBS:bool=OFF \
   -DCMAKE_POSITION_INDEPENDENT_CODE:bool=ON \
   -DR_ROOT=${R_HOME} \

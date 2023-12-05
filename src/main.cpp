@@ -817,7 +817,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   int rows = *num_rows;
   int columns = *num_columns;
 
-  std::cout << columns << std::endl;
+  // std::cout << columns << std::endl;
   int *concordant = new int[columns * columns];
   int *disconcordant = new int[columns * columns];
   std::memset(concordant, 0, columns * columns * sizeof(int));
@@ -833,14 +833,16 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
 
   for (int row_index = 0; row_index < rows; ++row_index) {
     for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {
-      for (int i = 0; i < columns; ++i) {
-        left_thresholds[i] = false;
-      }
+      
       int start_column = a_positions[row_index];
       int end_column = a_positions[row_index + 1];
 
       int start_column_b = a_positions[row_jndex];
       int end_column_b = a_positions[row_jndex + 1];
+
+      for (int i = 0; i < end_column_b - start_column_b; ++i) {
+        left_thresholds[i] = false;
+      }
       bool left_threshold_selected = false;
       bool right_threshold_selected = false;
       int right_down1_threshold = start_column_b;
@@ -849,7 +851,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
       int right_down2_threshold = start_column_b;
       bool left_activated = false;
       bool right_activated = false;
-      std::cout << row_index << " " << row_jndex << " OK" << std::endl;
+      // std::cout << row_index << " " << row_jndex << " OK" << std::endl;
       for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
         int prev_col_index = col1_index - 1;
         int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
@@ -881,8 +883,8 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
           while (right_down2_threshold < end_column_b && a_index[right_down2_threshold] < next_col) {
               right_down2_threshold += 1;
           }
-          if (left_down1_threshold < end_column_b && !left_thresholds[left_down1_threshold]) {
-            left_thresholds[left_down1_threshold] = true;
+          if (left_down1_threshold < end_column_b && !left_thresholds[left_down1_threshold - start_column_b]) {
+            left_thresholds[left_down1_threshold - start_column_b] = true;
             for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
                 for (int right = left + 1; right < right_down1_threshold; ++right) {
                   float product = a_values[left] * a_values[right];
@@ -897,8 +899,8 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
             }
           }
           
-          if (left_down2_threshold < end_column_b && !left_thresholds[left_down2_threshold]) {
-            left_thresholds[left_down2_threshold] = true;
+          if (left_down2_threshold < end_column_b && !left_thresholds[left_down2_threshold - start_column_b]) {
+            left_thresholds[left_down2_threshold - start_column_b] = true;
             for (int left = left_down2_threshold; left < right_down2_threshold; left++) {
                 for (int right = left + 1; right < right_down2_threshold; ++right) {
                   float product = a_values[left] * a_values[right];
@@ -987,7 +989,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   delete[] disconcordant;
   delete[] left_thresholds;
   delete[] a_values;
-  std::cout << "After remove" << std::endl;
+  // std::cout << "After remove" << std::endl;
 }
 
 
@@ -1061,21 +1063,13 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
         int col1 = (col1_index < end_column) ? a_index[col1_index]: columns;
         float value1 = (col1_index < end_column) ? a_values[col1_index]: 0;
         
-        // std::cout << right_down1_threshold << " " << end_column_down << " " << a_index[right_down1_threshold] << " " << col1 << std::endl;
         while (right_down1_threshold < end_column_down && a_index[right_down1_threshold] < col1) {
           right_down1_threshold += 1;
         }
-        // std::cout << right_down1_threshold << std::endl;
 
         if (right_down1_threshold < end_column_down && a_index[right_down1_threshold] == col1) {
           left_activated = true;
         }
-        // if (right_down1_threshold < end_column_down && a_index[right_down1_threshold] == col1) {
-        //   left_down2_threshold = right_down1_threshold + 1;
-        //   right_activated = true;
-        // } else {
-        //   left_down2_threshold = right_down1_threshold;
-        // }
 
         int left_down2_threshold = start_column_down_b;
         int right_down2_threshold = start_column_down_b;
@@ -1162,6 +1156,6 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
   delete[] disconcordant;
   delete[] a_values;
   delete[] b_values;
-  std::cout << "Gone" << std::endl;
+  // std::cout << "Gone" << std::endl;
 }
 

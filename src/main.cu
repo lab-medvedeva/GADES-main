@@ -1172,6 +1172,258 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
     delete[] squares;
 }
 
+__global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
+    int* a_index, int* a_positions, float* a_values,
+    int* concordant, int rows, int columns) 
+{
+  int row_index = blockIdx.y * blockDim.y + threadIdx.y;
+  int row_jndex = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row_index >= row_jndex || row_jndex >= rows) {
+    return;
+  }
+  int start_column = a_positions[row_index];
+  int end_column = a_positions[row_index + 1];
+
+  int start_column_b = a_positions[row_jndex];
+  int end_column_b = a_positions[row_jndex + 1];
+
+  bool left_thresholds[10000];
+  for (int i = 0; i < end_column_b - start_column_b; ++i) {
+    left_thresholds[i] = false;
+  }
+  bool left_threshold_selected = false;
+  bool right_threshold_selected = false;
+  int right_down1_threshold = start_column_b;
+  int left_down1_threshold = start_column_b;
+  int left_down2_threshold = start_column_b;
+  int right_down2_threshold = start_column_b;
+  bool left_activated = false;
+  bool right_activated = false;
+  for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
+    int prev_col_index = col1_index - 1;
+    int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
+    int col1 = a_index[col1_index];
+    float value1 = a_values[col1_index];
+    
+
+    while (right_down1_threshold < end_column_b && a_index[right_down1_threshold] < col1) {
+      right_down1_threshold += 1;
+    }
+
+    if (right_down1_threshold < end_column_b && a_index[right_down1_threshold] == col1) {
+      left_activated = true;
+    }
+    if (right_down1_threshold < end_column_b && a_index[right_down1_threshold] == col1) {
+      left_down2_threshold = right_down1_threshold + 1;
+      right_activated = true;
+    } else {
+      left_down2_threshold = right_down1_threshold;
+    }
+
+    right_down2_threshold = left_down2_threshold;
+    for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
+      int col2 = a_index[col2_index];
+      float value2 = a_values[col2_index];
+      int next_col_index = col2_index + 1;
+      int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
+
+      while (right_down2_threshold < end_column_b && a_index[right_down2_threshold] < next_col) {
+          right_down2_threshold += 1;
+      }
+      if (left_down1_threshold < end_column_b && !left_thresholds[left_down1_threshold - start_column_b]) {
+        left_thresholds[left_down1_threshold - start_column_b] = true;
+        for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+            for (int right = left + 1; right < right_down1_threshold; ++right) {
+              float product = a_values[left] * a_values[right];
+              if (product < 0) {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], -1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], -1);
+                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
+              } else {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // concordant[a_index[left] * columns + a_index[right]] += 1;
+                // concordant[a_index[right] * columns + a_index[left]] += 1;
+              }
+            }
+        }
+      }
+      
+      if (left_down2_threshold < end_column_b && !left_thresholds[left_down2_threshold - start_column_b]) {
+        left_thresholds[left_down2_threshold - start_column_b] = true;
+        for (int left = left_down2_threshold; left < right_down2_threshold; left++) {
+            for (int right = left + 1; right < right_down2_threshold; ++right) {
+              float product = a_values[left] * a_values[right];
+              if (product < 0) {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], -1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], -1);
+                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
+              } else {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // concordant[a_index[left] * columns + a_index[right]] += 1;
+                // concordant[a_index[right] * columns + a_index[left]] += 1;
+              }
+            }
+        }
+      }
+      
+      for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+            for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+              float product = a_values[left] * a_values[right];
+              if (product < 0) {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], -1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], -1);
+                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
+                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
+              } else {
+                atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
+                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // concordant[a_index[left] * columns + a_index[right]] += 1;
+                // concordant[a_index[right] * columns + a_index[left]] += 1;
+              }
+            }
+        }
+      
+      float left_value = (left_activated) ? a_values[right_down1_threshold] : 0;
+      float right_value = (right_activated) ? a_values[left_down2_threshold - 1] : 0;
+      
+      float left_diff = left_value - a_values[col1_index];
+      float right_diff = right_value - a_values[col2_index];
+      float product = left_diff * right_diff;
+      if (product > 0) {
+        atomicAdd(concordant + col1 * columns + col2, 1);
+        atomicAdd(concordant + col2 * columns + col1, 1);
+      } else if (product < 0) {
+        atomicAdd(concordant + col1 * columns + col2, -1);
+        atomicAdd(concordant + col2 * columns + col1, -1);
+      }
+      
+      for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
+        product = left_diff * a_values[right];
+        if (product < 0) {
+          atomicAdd(concordant + col1 * columns + a_index[right], -1);
+          atomicAdd(concordant + a_index[right] * columns + col1, -1);
+        } else if (product > 0) {
+          atomicAdd(concordant + col1 * columns + a_index[right], 1);
+          atomicAdd(concordant + a_index[right] * columns + col1, 1);
+        }
+      }
+          
+      for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
+        // std::cout << a_index[left] << " " << a_index[col2_index] << std::endl;
+        product = right_diff * a_values[left];
+        if (product < 0) {
+          atomicAdd(concordant + a_index[left] * columns + col2, -1);
+          atomicAdd(concordant + col2 * columns + a_index[left], -1);
+        } else if (product > 0) {
+          atomicAdd(concordant + a_index[left]* columns + col2, 1);
+          atomicAdd(concordant + col2 * columns + a_index[left], 1);
+        }
+      }
+
+      right_activated = false;
+      while (left_down2_threshold < end_column_b && a_index[left_down2_threshold] <= next_col) {
+          if (a_index[left_down2_threshold] == next_col) {
+            right_activated = true;
+          }
+          left_down2_threshold += 1;
+      }
+
+    }
+    
+    while (left_down1_threshold < end_column_b && a_index[left_down1_threshold] <= col1) {
+      left_down1_threshold += 1;
+    }
+  }
+}
+
+extern "C" void matrix_Kendall_sparse_distance_same_block(
+    int* a_index,
+    int* a_positions,
+    double* a_double_values,
+    int* b_index,
+    int* b_positions,
+    double* b_double_values,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* num_columns_b,
+    int* num_elements_a,
+    int* num_elements_b
+) {
+
+    int rows = *num_rows;
+    int columns = *num_columns;
+    int num_elements_a_int = *num_elements_a;
+
+    float* a_values = new float[num_elements_a_int];
+    int* h_concordant = new int[columns * columns];
+
+    for (int i = 0; i < num_elements_a_int; ++i) {
+        a_values[i] = static_cast<float>(a_double_values[i]);
+    }
+
+    for (int i = 0; i < columns * columns; ++i) {
+        h_concordant[i] = 0;
+    }
+
+    float* d_a_values;
+    int* d_concordant;
+    int* d_a_index;
+    int* d_a_positions;
+
+    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
+    cudaMalloc(&d_concordant, columns * columns * sizeof(int));
+    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
+    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
+
+    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(
+      d_concordant,
+      h_concordant,
+      columns * columns * sizeof(int),
+      cudaMemcpyHostToDevice
+    );
+    // cudaMemcpy(d_squares, squares, columns * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
+
+    int threads = 16;
+    int blocks_in_row = (rows + threads - 1) / threads;
+    int blocks_in_col = (rows + threads - 1) / threads;
+
+    dim3 THREADS(threads, threads);
+    dim3 BLOCKS(blocks_in_row, blocks_in_col);
+
+    RkendallSparseCorr_gpu_atomic_float_same_block<<<BLOCKS, THREADS>>>(
+        d_a_index, d_a_positions, d_a_values,
+        //b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
+        d_concordant, rows, columns
+      );
+
+    cudaMemcpy(h_concordant, d_concordant, columns * columns * sizeof(int), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < columns * columns; ++i) {
+        int row_index = i / columns;
+        int column_index = i % columns;
+        if (row_index != column_index) {
+            result[i] = static_cast<double>(h_concordant[i]) * 2.0 / rows / (rows - 1);
+        } else {
+          result[i] = 1.0;
+        }
+    }
+
+    cudaFree(d_a_values);
+    cudaFree(d_concordant);
+    cudaFree(d_a_index);
+    cudaFree(d_a_positions);
+
+    delete[] a_values;
+    delete[] h_concordant;
+}
+
 //========================================================================================
 
 extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){

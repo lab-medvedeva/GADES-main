@@ -32,7 +32,6 @@ measurements <- numeric(times)
 
 for (i in 1:times) {
     st_t <- as.numeric(Sys.time()) * 1000000
-#data_matrix <- as.matrix(data)
 
     if (method == 'GPU') {
         #print(metric)
@@ -56,53 +55,13 @@ for (i in 1:times) {
 
     measurements[i] <- end_time - st_t
     gc()
-    #print(as.numeric(Sys.time()) * 1000000 - st_t)
 }
 
 print('Sparse Matrix')
 
 print(mean(as.matrix(measurements[2:times])))
 print(sd(as.matrix(measurements[2:times])))
-# print(as.matrix(measurements))
+print(as.matrix(measurements))
 print('Matrix')
-#write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
+write.table(measurements, 'matrix.csv', sep=',')
 print(distMatrix_mtrx[1:11, 1:11])
-
-measurements <- numeric(times)
-
-for (i in 1:times) {
-    st_t <- as.numeric(Sys.time()) * 1000000
-#data_matrix <- as.matrix(data)
-
-    if (method == 'GPU') {
-        #print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = 5000, metric = metric,type="gpu")
-        #print(dim(distMatrix_mtrx))
-    } else if (method == 'CPU') {
-        #print(metric)
-        #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(as.matrix(data), batch_size = 5000, metric = metric,type="cpu")
-        # print(dim(distMatrix_mtrx))
-    } else if (method == 'amap') {
-        print('Calc dist')
-        distMatrix_mtrx <- as.matrix(Dist(t(data), method=metric, nbproc=24))
-        #print(distMatrix_mtrx)
-    } else if (method == 'factoextra') {
-        distMatrix_mtrx <- as.matrix(get_dist(data, method = metric))
-    } else if (method == 'philentropy') {
-    	distMatrix_mtrx <- as.matrix(philentropy::distance(t(data), method=metric))
-    }
-    end_time <- as.numeric(Sys.time()) * 1000000
-
-    measurements[i] <- end_time - st_t
-    print(measurements[i])
-    gc()
-    #print(as.numeric(Sys.time()) * 1000000 - st_t)
-}
-print('Dense Matrix')
-print(mean(as.matrix(measurements[2:times])))
-print(sd(as.matrix(measurements[2:times])))
-# print(as.matrix(measurements))
-print('Matrix')
-#write.table(distMatrix_mtrx, 'matrix.csv', sep=',')
-print(distMatrix_mtrx[1:8, 1:8])

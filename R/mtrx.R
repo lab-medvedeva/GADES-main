@@ -25,7 +25,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     }
     if (first_index == second_index) {
         if (metric == 'kendall') {
-            fn_name <- "matrix_Kendall_distance_same_block"
+            fn_name <- glue("matrix_Kendall{postfix}_distance_same_block")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_same_block")
         } else if(metric =='pearson') {
@@ -162,15 +162,15 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         }
        #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    print(fn_name)
+    # print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
     first_start <- first_index + 1
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
-    print(dim(count_matrix))
-    print(c(second_start:second_right_border))
+    # print(dim(count_matrix))
+
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
 
     batch_a_size <- first_right_border - first_index
