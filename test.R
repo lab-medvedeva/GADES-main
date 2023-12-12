@@ -14,6 +14,7 @@ library(amap)
 library(HobotnicaGPU)
 library(Matrix)
 library("factoextra")
+library(glue)
 
 args = commandArgs(trailingOnly=TRUE)
 datain = args[1]
@@ -21,8 +22,10 @@ method = args[2]
 times = strtoi(args[3])
 metric = args[4]
 batch_size = strtoi(args[5])
+output = args[6]
 
 print('Reading table')
+print(glue("{output}_{method}_{metric}.csv"))
 
 data <- readMM(datain)
 # data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
@@ -63,5 +66,7 @@ print(mean(as.matrix(measurements[2:times])))
 print(sd(as.matrix(measurements[2:times])))
 print(as.matrix(measurements))
 print('Matrix')
+
+write.table(measurements, glue("{output}_{method}_{metric}.csv"), sep=',')
 write.table(measurements, 'matrix.csv', sep=',')
 print(distMatrix_mtrx[1:11, 1:11])
