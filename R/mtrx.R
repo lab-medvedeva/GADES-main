@@ -51,7 +51,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
-
+    print(dim(count_submatrix_a))
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
     #st_t <- as.numeric(Sys.time()) * 1000000
@@ -241,7 +241,6 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
   n <- nrow(a)
   m <- ncol(a)
 
-
   result_overall <- double(m * m)
   dim(result_overall) <- c(m, m)
   
@@ -253,33 +252,43 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
 
         for (second_index in seq(0, m - 1, by=batch_size)) {
             st_t <- as.numeric(Sys.time()) * 1000000
-            if(type=="gpu"){
-		result <- process_batch(
-                	count_matrix = a,
-                	first_index = first_index,
-                	second_index = second_index,
-                	batch_size = batch_size,
-                	metric = metric, 
-			sparse=sparse
-		)
-	    } else if (type=="cpu"){ 
-		    result <- process_batch_cpu(
-                	count_matrix = a,
-                	first_index = first_index,
-                	second_index = second_index,
-                	batch_size = batch_size,
-                	metric = metric,
-                    sparse = sparse
-                )
+            if (first_index > second_index) {
+                a_left = first_index + 1
+                b_left = second_index + 1
+                a_right <- min(first_index + batch_size, ncol(a))
+                b_right <- min(second_index + batch_size, ncol(a))
+                result_overall[c(a_left:a_right), c(b_left:b_right)] = t(result_overall[c(b_left:b_right), c(a_left:a_right)])
+            } else {
+                if(type=="gpu"){
+                    result <- process_batch(
+                        count_matrix = a,
+                        first_index = first_index,
+                        second_index = second_index,
+                        batch_size = batch_size,
+                        metric = metric, 
+                        sparse=sparse
+                    )
+                } else if (type=="cpu") { 
+                    result <- process_batch_cpu(
+                        count_matrix = a,
+                        first_index = first_index,
+                        second_index = second_index,
+                        batch_size = batch_size,
+                        metric = metric,
+                        sparse = sparse
+                    )
+                }
+                a_left = first_index + 1
+                a_right = first_index + result$batch_a_size
+                b_left = second_index + 1
+                b_right = second_index + result$batch_b_size
+                
+                correlation_matrix <- result$correlation_matrix
+                result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
             }
-            a_left = first_index + 1
-            a_right = first_index + result$batch_a_size
-            b_left = second_index + 1
-            b_right = second_index + result$batch_b_size
-            
-            correlation_matrix <- result$correlation_matrix
-            result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
             end_t <- as.numeric(Sys.time()) * 1000000
+            print('GC called')
+            print(gc())
         }
     } 
     return (result_overall)

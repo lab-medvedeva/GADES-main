@@ -455,6 +455,8 @@ extern "C" void  matrix_Euclidean_sparse_distance_same_block_cpu(
     int start_column = a_positions[row_index];
     int end_column = a_positions[row_index + 1];
 
+    // printf("%d\n", row_index);
+
     for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
       
       for (int col2_index = col1_index; col2_index < end_column; ++col2_index) {
@@ -817,10 +819,10 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   int rows = *num_rows;
   int columns = *num_columns;
 
-  // std::cout << columns << std::endl;
-  int *concordant = new int[columns * columns];
+  std::cout << columns << std::endl;
+  //int *concordant = new int[columns * columns];
   int *disconcordant = new int[columns * columns];
-  std::memset(concordant, 0, columns * columns * sizeof(int));
+  //std::memset(concordant, 0, columns * columns * sizeof(int));
   std::memset(disconcordant, 0, columns * columns * sizeof(int));
 
   float *a_values = new float[*num_elements_a];
@@ -830,8 +832,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
 
   bool* left_thresholds = new bool[columns];
   
-
+  
   for (int row_index = 0; row_index < rows; ++row_index) {
+    if (row_index % 1000 == 0) {
+        std::cout << row_index << " ";
+    }
     for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {
       
       int start_column = a_positions[row_index];
@@ -851,7 +856,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
       int right_down2_threshold = start_column_b;
       bool left_activated = false;
       bool right_activated = false;
-      // std::cout << row_index << " " << row_jndex << " OK" << std::endl;
+      
       for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
         int prev_col_index = col1_index - 1;
         int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
@@ -891,10 +896,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
                   if (product < 0) {
                     disconcordant[a_index[left] * columns + a_index[right]] += 1;
                     disconcordant[a_index[right] * columns + a_index[left]] += 1;
-                  } else {
-                    concordant[a_index[left] * columns + a_index[right]] += 1;
-                    concordant[a_index[right] * columns + a_index[left]] += 1;
-                  }
+                  } 
+                  //else {
+                  //  concordant[a_index[left] * columns + a_index[right]] += 1;
+                  //  concordant[a_index[right] * columns + a_index[left]] += 1;
+                  //}
                 }
             }
           }
@@ -907,10 +913,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
                   if (product < 0) {
                     disconcordant[a_index[left] * columns + a_index[right]] += 1;
                     disconcordant[a_index[right] * columns + a_index[left]] += 1;
-                  } else {
-                    concordant[a_index[left] * columns + a_index[right]] += 1;
-                    concordant[a_index[right] * columns + a_index[left]] += 1;
-                  }
+                  } 
+                  //else {
+                  //  concordant[a_index[left] * columns + a_index[right]] += 1;
+                  //  concordant[a_index[right] * columns + a_index[left]] += 1;
+                  //}
                 }
             }
           }
@@ -921,10 +928,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
                   if (product < 0) {
                     disconcordant[a_index[left] * columns + a_index[right]] += 1;
                     disconcordant[a_index[right] * columns + a_index[left]] += 1;
-                  } else {
-                    concordant[a_index[left] * columns + a_index[right]] += 1;
-                    concordant[a_index[right] * columns + a_index[left]] += 1;
-                  }
+                  } 
+                  //else {
+                  //  concordant[a_index[left] * columns + a_index[right]] += 1;
+                  //  concordant[a_index[right] * columns + a_index[left]] += 1;
+                  //}
                 }
             }
           
@@ -934,10 +942,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
           float left_diff = left_value - a_values[col1_index];
           float right_diff = right_value - a_values[col2_index];
           float product = left_diff * right_diff;
-          if (product > 0) {
-              concordant[col1 * columns + col2] += 1;
-              concordant[col2 * columns + col1] += 1;
-          } else if (product < 0) {
+          //if (product > 0) {
+          //    concordant[col1 * columns + col2] += 1;
+          //    concordant[col2 * columns + col1] += 1;
+          //} else 
+          if (product < 0) {
               disconcordant[col1 * columns + col2] += 1;
               disconcordant[col2 * columns + col1] += 1;
           }
@@ -947,10 +956,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
             if (product < 0) {
               disconcordant[col1 * columns + a_index[right]] += 1;
               disconcordant[a_index[right] * columns + col1] += 1;
-            } else if (product > 0) {
-              concordant[col1 * columns + a_index[right]] += 1;
-              concordant[a_index[right] * columns + col1] += 1;
-            }
+            } 
+            //else if (product > 0) {
+            //  concordant[col1 * columns + a_index[right]] += 1;
+            //  concordant[a_index[right] * columns + col1] += 1;
+            //}
           }
               
           for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
@@ -959,10 +969,11 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
             if (product < 0) {
                 disconcordant[a_index[left] * columns + col2] += 1;
                 disconcordant[col2 * columns + a_index[left]] += 1;
-            } else if (product > 0) {
-                concordant[a_index[left]* columns + col2] += 1;
-                concordant[col2 * columns + a_index[left]] += 1;
-            }
+            } 
+            //else if (product > 0) {
+            //    concordant[a_index[left]* columns + col2] += 1;
+            //    concordant[col2 * columns + a_index[left]] += 1;
+            //}
           }
 
           right_activated = false;
@@ -982,10 +993,10 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
     }
   }
   for (int i = 0; i < columns * columns; ++i) {
-    result[i] = static_cast<double>((concordant[i] - disconcordant[i]) * 2.0f / rows / (rows - 1));
+    result[i] = static_cast<double>(disconcordant[i]) * 2.0f / rows / (rows - 1);
   }
 
-  delete[] concordant;
+  //delete[] concordant;
   delete[] disconcordant;
   delete[] left_thresholds;
   delete[] a_values;
@@ -1012,9 +1023,9 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
   int columns = *num_columns;
   int columns_b = *num_columns_b;
 
-  int *concordant = new int[columns * columns_b];
+  //int *concordant = new int[columns * columns_b];
   int *disconcordant = new int[columns * columns_b];
-  std::memset(concordant, 0, columns * columns_b * sizeof(int));
+  //std::memset(concordant, 0, columns * columns_b * sizeof(int));
   std::memset(disconcordant, 0, columns * columns_b * sizeof(int));
   float *a_values = new float[*num_elements_a];
   float *b_values = new float[*num_elements_b];
@@ -1091,9 +1102,10 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
                   assert(b_index[right] < columns_b);
                   if (product < 0) {
                     disconcordant[b_index[right] * columns + a_index[left]] += 1;
-                  } else {
-                    concordant[b_index[right] * columns + a_index[left]] += 1;
-                  }
+                  } 
+                  //else {
+                  //  concordant[b_index[right] * columns + a_index[left]] += 1;
+                  //}
                 }
             }
           // std::cout << "COL" << col1 << " " << col2 << std::endl;
@@ -1107,9 +1119,10 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
           
           float left_diff = left_value - value1;
           float product = left_diff * right_diff;
-          if (product > 0) {
-              concordant[col2 * columns + col1] += 1;
-          } else if (product < 0) {
+          //if (product > 0) {
+          //    concordant[col2 * columns + col1] += 1;
+          //} else 
+          if (product < 0) {
               disconcordant[col2 * columns + col1] += 1;
           }
           
@@ -1117,18 +1130,20 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
             product = left_diff * b_values[right];
             if (product < 0) {
               disconcordant[b_index[right] * columns + col1] += 1;
-            } else if (product > 0) {
-              concordant[b_index[right] * columns + col1] += 1;
-            }
+            } 
+            //else if (product > 0) {
+            //  concordant[b_index[right] * columns + col1] += 1;
+            //}
           }
               
           for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
             product = right_diff * a_values[left];
             if (product < 0) {
                 disconcordant[col2 * columns + a_index[left]] += 1;
-            } else if (product > 0) {
-                concordant[col2 * columns + a_index[left]] += 1;
-            }
+            } 
+            //else if (product > 0) {
+            //    concordant[col2 * columns + a_index[left]] += 1;
+            //}
           }
 
           right_activated = false;
@@ -1149,10 +1164,10 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
     }
   }
   for (int i = 0; i < columns * columns_b; ++i) {
-    result[i] = static_cast<double>((concordant[i] - disconcordant[i]) * 2.0f / rows / (rows - 1)); 
+    result[i] = static_cast<double>(disconcordant[i]) * 2.0f / rows / (rows - 1); 
   }
 
-  delete[] concordant;
+  //delete[] concordant;
   delete[] disconcordant;
   delete[] a_values;
   delete[] b_values;

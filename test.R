@@ -23,14 +23,20 @@ times = strtoi(args[3])
 metric = args[4]
 batch_size = strtoi(args[5])
 output = args[6]
+print(args)
+sparse = as.logical(args[7])
 
 print('Reading table')
 print(glue("{output}_{method}_{metric}.csv"))
+print(sparse)
 
 data <- readMM(datain)
-# data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
+#data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
 print('Completed reading')
 
+if (!sparse) {
+    data <- as.matrix(data)
+}
 measurements <- numeric(times)
 
 for (i in 1:times) {
@@ -38,19 +44,20 @@ for (i in 1:times) {
 
     if (method == 'GPU') {
         #print(metric)
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size , metric = metric,type="gpu",sparse=T)
-        #print(dim(distMatrix_mtrx))
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size , metric = metric,type="gpu",sparse=sparse)
+        print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size, metric = metric, type="cpu", sparse=T)
-        # print(dim(distMatrix_mtrx))
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size, metric = metric, type="cpu", sparse=sparse)
+        print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         print('Calc dist')
         distMatrix_mtrx <- as.matrix(Dist(t(data), method=metric, nbproc=24))
         #print(distMatrix_mtrx)
     } else if (method == 'factoextra') {
-        distMatrix_mtrx <- as.matrix(get_dist(data, method = metric))
+        distMatrix_mtrx <- as.matrix(get_dist(t(data), method = metric))
+        print('Factoextra')
     } else if (method == 'philentropy') {
     	distMatrix_mtrx <- as.matrix(philentropy::distance(t(data), method=metric))
     }
@@ -69,4 +76,5 @@ print('Matrix')
 
 write.table(measurements, glue("{output}_{method}_{metric}.csv"), sep=',')
 write.table(measurements, 'matrix.csv', sep=',')
+print(dim(distMatrix_mtrx))
 print(distMatrix_mtrx[1:11, 1:11])
