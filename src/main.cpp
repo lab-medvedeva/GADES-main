@@ -820,6 +820,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   int columns = *num_columns;
 
   std::cout << columns << std::endl;
+  std::cout << *num_elements_a << std::endl;
   //int *concordant = new int[columns * columns];
   int *disconcordant = new int[columns * columns];
   //std::memset(concordant, 0, columns * columns * sizeof(int));
@@ -834,17 +835,18 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   
   
   for (int row_index = 0; row_index < rows; ++row_index) {
-    if (row_index % 1000 == 0) {
-        std::cout << row_index << " ";
+    if (row_index % 50 == 0) {
+        std::cout << row_index << std::endl;
     }
-    for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {
-      
-      int start_column = a_positions[row_index];
-      int end_column = a_positions[row_index + 1];
+
+    int start_column = a_positions[row_index];
+
+    int end_column = a_positions[row_index + 1];
+    for (int row_jndex = row_index + 1; row_jndex < rows; ++row_jndex) {  
 
       int start_column_b = a_positions[row_jndex];
       int end_column_b = a_positions[row_jndex + 1];
-
+      
       for (int i = 0; i < end_column_b - start_column_b; ++i) {
         left_thresholds[i] = false;
       }

@@ -28,17 +28,21 @@ __global__ void Rkendall_gpu_atomic_float(float* array, const int n, const int m
   int row1 = blockIdx.y * blockDim.y + threadIdx.y;
   int row2 = blockIdx.x * blockDim.x + threadIdx.x;
 
+  if (row1 >= row2 || row1 >= n || row2 >= n) {
+    return;
+  }
 
+  if (row2 % 5000 == 0 && row1 % 500 == 0) {
+    printf("%d %d %d\n", row1, row2, m);
+  }
   for (int col1_num = 0; col1_num < m; ++col1_num) {
       for (int col2_num = col1_num + 1; col2_num < m; ++col2_num) {
           float* col1 = array + n * col1_num;
           float* col2 = array + n * col2_num;
 
-          if (row1 < row2 && row2 < n){
-            if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
-              atomicAdd(result + col1_num * m + col2_num, 1);
-              atomicAdd(result + col2_num * m + col1_num, 1);
-            }
+          if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
+            atomicAdd(result + col1_num * m + col2_num, 1);
+//              atomicAdd(result + col2_num * m + col1_num, 1);
           }
       }
   }
@@ -70,16 +74,16 @@ __global__ void Rkendall_gpu_atomic_float_different_blocks(float* array, float* 
   int row1 = blockIdx.y * blockDim.y + threadIdx.y;
   int row2 = blockIdx.x * blockDim.x + threadIdx.x;
 
-
+  if (row1 >= row2 || row2 >= n || row1 >= n) {
+    return;
+  }
   for (int col1_num = 0; col1_num < m; ++col1_num) {
       for (int col2_num = 0; col2_num < m_b; ++col2_num) {
           float* col1 = array + n * col1_num;
           float* col2 = array2 + n * col2_num;
 
-          if (row1 < row2 && row2 < n){
-            if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
+          if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
               atomicAdd(result + col2_num * m + col1_num, 1);
-            }
           }
       }
   }
@@ -256,7 +260,7 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   //cudaEventElapsedTime(&milliseconds, start, stop1);
 
   //Rprintf("%f memcpy\n", milliseconds);
-  int threads = 16;
+  int threads = 32;
   int blocks_in_row = (*n + threads - 1) / threads;
   int blocks_in_col = (*n + threads - 1) / threads;
 
@@ -281,7 +285,15 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
 
   
   for (int i = 0; i < (*m) * (*m); ++i) {
-    c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
+      int row_index = i / (*m);
+      int column_index = i % (*m);
+      if (row_index < column_index) {
+        c[i] = static_cast<double>(h_result[i]) * 2.0 / (*n) / (*n - 1); //rows / (rows - 1);
+      } else if (row_index > column_index) {
+        c[i] = c[column_index * (*m) + row_index];
+      } else {
+        c[i] = 1.0;
+      }
   }
   free(array_new);
   free(h_result);
@@ -1191,16 +1203,18 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
   if (row_index >= row_jndex || row_jndex >= rows) {
     return;
   }
-  //if (row_index % 100 == 0 && row_jndex % 5000 == 0) {
-  //  printf("%d %d\n", row_index, row_jndex);
-  //}
+  //printf("%d\n", columns);
+  if (row_index % 200 == 0 && row_jndex % 2000 == 0) { 
+      printf("%d %d\n", row_index, row_jndex);
+  }
   int start_column = a_positions[row_index];
   int end_column = a_positions[row_index + 1];
 
   int start_column_b = a_positions[row_jndex];
   int end_column_b = a_positions[row_jndex + 1];
 
-  bool left_thresholds[10000];
+  bool left_thresholds[5000];
+  //printf("%d\n", end_column_b - start_column_b);
   for (int i = 0; i < end_column_b - start_column_b; ++i) {
     left_thresholds[i] = false;
   }
@@ -1250,7 +1264,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
                 // disconcordant[a_index[left] * columns + a_index[right]] += 1;
                 // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
@@ -1271,7 +1285,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
                 // disconcordant[a_index[left] * columns + a_index[right]] += 1;
                 // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
@@ -1290,7 +1304,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
+                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
                 // disconcordant[a_index[left] * columns + a_index[right]] += 1;
                 // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
@@ -1315,14 +1329,14 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
       //} else 
       if (product < 0) {
         atomicAdd(concordant + col1 * columns + col2, 1);
-        atomicAdd(concordant + col2 * columns + col1, 1);
+        // atomicAdd(concordant + col2 * columns + col1, 1);
       }
       
       for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
         product = left_diff * a_values[right];
         if (product < 0) {
           atomicAdd(concordant + col1 * columns + a_index[right], 1);
-          atomicAdd(concordant + a_index[right] * columns + col1, 1);
+          //atomicAdd(concordant + a_index[right] * columns + col1, 1);
         } 
         //else if (product > 0) {
         //  atomicAdd(concordant + col1 * columns + a_index[right], 1);
@@ -1335,7 +1349,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
         product = right_diff * a_values[left];
         if (product < 0) {
           atomicAdd(concordant + a_index[left] * columns + col2, 1);
-          atomicAdd(concordant + col2 * columns + a_index[left], 1);
+          //atomicAdd(concordant + col2 * columns + a_index[left], 1);
         }
         //else if (product > 0) {
         //  atomicAdd(concordant + a_index[left]* columns + col2, 1);
@@ -1409,7 +1423,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block(
     cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
-    int threads = 16;
+    int threads = 32;
     int blocks_in_row = (rows + threads - 1) / threads;
     int blocks_in_col = (rows + threads - 1) / threads;
 
@@ -1426,8 +1440,10 @@ extern "C" void matrix_Kendall_sparse_distance_same_block(
     for (int i = 0; i < columns * columns; ++i) {
       int row_index = i / columns;
       int column_index = i % columns;
-      if (row_index != column_index) {
+      if (row_index < column_index) {
         result[i] = static_cast<double>(h_concordant[i]) * 2.0 / rows / (rows - 1);
+      } else if (row_index > column_index) {
+        result[i] = result[column_index * columns + row_index];
       } else {
         result[i] = 1.0;
       }
@@ -1618,7 +1634,7 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks(
     cudaMemcpy(d_b_index, b_index, num_elements_b_int * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_b_positions, b_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
-    int threads = 16;
+    int threads = 32;
     int blocks_in_row = (rows + threads - 1) / threads;
     int blocks_in_col = (rows + threads - 1) / threads;
 
