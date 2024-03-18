@@ -25,7 +25,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     }
     if (first_index == second_index) {
         if (metric == 'kendall') {
-            fn_name <- "matrix_Kendall_distance_same_block"
+            fn_name <- glue("matrix_Kendall{postfix}_distance_same_block")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_same_block")
         } else if(metric =='pearson') {
@@ -35,7 +35,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
 	}
     } else {
         if (metric == 'kendall') {
-            fn_name <- "matrix_Kendall_distance_different_blocks"
+            fn_name <- glue("matrix_Kendall{postfix}_distance_different_blocks")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_different_blocks")
         } else if(metric =='pearson') {
@@ -51,7 +51,7 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
-
+    print(dim(count_submatrix_a))
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
     #st_t <- as.numeric(Sys.time()) * 1000000
@@ -162,13 +162,15 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         }
        #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    #print(fn_name)
+    # print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
     first_start <- first_index + 1
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
+    # print(dim(count_matrix))
+
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
 
     batch_a_size <- first_right_border - first_index
@@ -234,39 +236,47 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 #' @param type "gpu" or "cpu".
 #' @return A list of correlation matrix, batch_a size and batch_b size.
 #' @export
-mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu", sparse = F)
+mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu", sparse = F, write=F)
 {
   n <- nrow(a)
   m <- ncol(a)
-
-
-  result_overall <- double(m * m)
-  dim(result_overall) <- c(m, m)
   
-  colnames(result_overall) = colnames(a)
-  rownames(result_overall) = colnames(a)
-
   if (filename == ""){
-    for (first_index in seq(0, m - 1, by=batch_size)) {
+    result_overall <- double(m * m)
+    dim(result_overall) <- c(m, m)
+  
+    colnames(result_overall) = colnames(a)
+    rownames(result_overall) = colnames(a)
+  }
+  for (first_index in seq(0, m - 1, by=batch_size)) {
 
-        for (second_index in seq(0, m - 1, by=batch_size)) {
-            st_t <- as.numeric(Sys.time()) * 1000000
+    for (second_index in seq(0, m - 1, by=batch_size)) {
+        st_t <- as.numeric(Sys.time()) * 1000000
+        if (first_index > second_index) {
+            a_left = first_index + 1
+            b_left = second_index + 1
+            a_right <- min(first_index + batch_size, ncol(a))
+            b_right <- min(second_index + batch_size, ncol(a))
+            if (write) {
+                result_overall[c(a_left:a_right), c(b_left:b_right)] = t(result_overall[c(b_left:b_right), c(a_left:a_right)])
+            }
+        } else {
             if(type=="gpu"){
-		result <- process_batch(
-                	count_matrix = a,
-                	first_index = first_index,
-                	second_index = second_index,
-                	batch_size = batch_size,
-                	metric = metric, 
-			sparse=sparse
-		)
-	    } else if (type=="cpu"){ 
-		    result <- process_batch_cpu(
-                	count_matrix = a,
-                	first_index = first_index,
-                	second_index = second_index,
-                	batch_size = batch_size,
-                	metric = metric,
+                result <- process_batch(
+                    count_matrix = a,
+                    first_index = first_index,
+                    second_index = second_index,
+                    batch_size = batch_size,
+                    metric = metric, 
+                    sparse=sparse
+                )
+            } else if (type=="cpu") { 
+                result <- process_batch_cpu(
+                    count_matrix = a,
+                    first_index = first_index,
+                    second_index = second_index,
+                    batch_size = batch_size,
+                    metric = metric,
                     sparse = sparse
                 )
             }
@@ -276,31 +286,24 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
             b_right = second_index + result$batch_b_size
             
             correlation_matrix <- result$correlation_matrix
-            result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
-            end_t <- as.numeric(Sys.time()) * 1000000
-            # print(end_t - st_t)
-        }
-    } 
-    
 
+            if (filename == "") {
+                result_overall[c(a_left:a_right), c(b_left:b_right)] <- correlation_matrix
+            } else if (write) {
+                output_filename <- glue('{filename}_{a_left}_{a_right}_{b_left}_{b_right}.csv')
+                write.csv(correlation_matrix, output_filename)
+            }
+        }
+        end_t <- as.numeric(Sys.time()) * 1000000
+        print('GC called')
+        print(gc())
+    }
+  }
+  if (write) {
     return (result_overall)
   }
-  else{
-  RESULTFILE <- file(paste(filename,"kdm",sep="."), "wb")
-  writeBin(as.integer(m), RESULTFILE, size = 4)
-  if (length(colnames(a)) != 0){
-    writeBin(colnames(a), RESULTFILE)
-  }
-  else{
-    writeBin(as.character(c(1:m)), RESULTFILE)
-  }
-  close(RESULTFILE)
-  result <- .C("file_Kendall_distance",
-          data = as.double(a),
-          rows = as.integer(n),
-          cols = as.integer(m),
-          fout = as.character(paste(filename,"kdm",sep=".")))
-  }
+
+  return (TRUE)
 }
 
 #' get matrix from file.
