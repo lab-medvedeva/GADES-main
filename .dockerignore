@@ -1,0 +1,10 @@
+*.tsv
+*.mtx
+*.csv
+*.distmatrix
+lib/
+inst/
+*.ipynb
+build/
+Generated*
+results/

@@ -1,3 +1,7 @@
+*.ipynb_checkpoints*
+*.mtx
+*.csv
+*.tsv
 **/.DS_Store
 *.slo
 *.lo
