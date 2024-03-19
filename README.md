@@ -12,7 +12,7 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 
 ### Docker image start CUDA
 
-Please, install [https://github.com/NVIDIA/nvidia-container-toolkit](NVIDIA Container Toolkit) first.
+Please, install [NVIDIA Container Toolkit]([NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit)) first.
 
 ```shell
 docker run --gpus all --name gades-gpu akhtyamovpavel/gades:gpu
@@ -21,7 +21,7 @@ docker run --gpus all --name gades-gpu akhtyamovpavel/gades:gpu
 ### Local installation
 ```shell
 git clone https://github.com/lab-medvedeva/GADES-main.git
-cd GADES
+cd GADES-main
 Rscript install.R
 ```
 This command builds code of the library using CMake, checks GPU and install package using CPU+GPU or only CPU code.
