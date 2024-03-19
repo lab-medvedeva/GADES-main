@@ -12,7 +12,7 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 
 ### Docker image start CUDA
 
-Please, install [NVIDIA Container Toolkit]([NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit)) first.
+Please, install [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) first.
 
 ```shell
 docker run --gpus all --name gades-gpu akhtyamovpavel/gades:gpu
