@@ -10,10 +10,12 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 
 ## Installation instructions
 
-### Docker image start
+### Docker image start CUDA
+
+Please, install [https://github.com/NVIDIA/nvidia-container-toolkit](NVIDIA Container Toolkit) first.
 
 ```shell
-docker run --names gades-gpu akhtyamovpavel/gades:gpu
+docker run --gpus all --name gades-gpu akhtyamovpavel/gades:gpu
 ```
 
 ### Local installation
@@ -39,30 +41,27 @@ make
 
 ### Dense mode
 ```R
-library(HobotnicaGPU)
+library(GADES)
 
-mtx<-matrix(runif(100000),nrow=100)
-dense.mtx <- as.matrix(read.table(mtx, header=T, row.names = 1, sep=","))
-dist.matrix <- mtrx_distance(dense.mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F)
+mtx <- matrix(runif(100000), nrow=100)
+
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F, write=T)
 ```
 
 ### Sparse mode
 ```R
-library(HobotnicaGPU)
+library(GADES)
 
+mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
 
-matrix <- rsparsematrix(nrow, ncol, density)
-
-matrix <- Matrix::readMM('./matrix.mtx')
-dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='cpu', sparse=T, write=T)
 ```
 
 ### Sparse mode - GPU
 ```R
-library(HobotnicaGPU)
-library(Matrix)
-matrix <- Matrix::readMM(matrix.mtx')
-dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
+library(GADES)
+mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T, write=T)
 ```
 
 

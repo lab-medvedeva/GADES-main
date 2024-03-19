@@ -36,9 +36,4 @@ install(
    TARGETS mtrx_cpu
    LIBRARY DESTINATION libs
 )
-#cuda_add_library(
-#    mtrx
-#    SHARED
-#    main.cu
-#)
 

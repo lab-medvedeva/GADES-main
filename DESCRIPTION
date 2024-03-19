@@ -1,9 +1,10 @@
-Package: HobotnicaGPU
+Package: GADES
 Version: 0.1.0
-Date: 2022-12-15
-Title: Hobotnica-GPU Lab-Medvedeva
+Date: 2024-20-03
+Title: GADES - GPU-Assisted Distance Estimation Software
 Description: Parallel distance matrices for single-cell RNA sequence data.
 Author: Ausaaf Nabi <nabi.a@phystech.edu>, Akhatyamov Pavel <akhtyamovpavel@gmail.com>
 Maintainer: Ausaaf Nabi <nabi.a@phystech.edu>
-License: CC 3.0 
+License: GNU GPL
 RoxygenNote: 7.2.2
+Imports: glue

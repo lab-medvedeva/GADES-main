@@ -1,11 +1,9 @@
-if(!is.loaded("matrix_Kendall_distance_same_block")) {
-        library.dynam('mtrx', package = 'HobotnicaGPU', lib.loc = NULL)
+.onLoad <- function(libname, pkgname) {
+   library.dynam('mtrx', package = 'GADES', lib.loc = NULL)
+   library.dynam('mtrx_cpu', package = 'GADES', lib.loc = NULL)
+   library(glue)
 }
-if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
-       library.dynam('mtrx_cpu', package = 'HobotnicaGPU', lib.loc = NULL)
-    }
 
-library(glue)
 
 #' Function to process batch from shared objects for GPU.
 #'
@@ -51,23 +49,8 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
-    print(dim(count_submatrix_a))
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
-    #st_t <- as.numeric(Sys.time()) * 1000000
-    #result <- .C(
-    #    fn_name,
-    #    matrix_a = as.double(count_submatrix_a),
-    #    matrix_b = as.double(count_submatrix_b),
-    #    dist_matrix = double(batch_a_size * batch_b_size),
-    #    rows = as.integer(nrow(count_matrix)),
-    #    cols_a = as.integer(batch_a_size),
-    #    cols_b = as.integer(batch_b_size),
-	#PACKAGE = "mtrx"
-    #)$dist_matrix
-    #end_t = as.numeric(Sys.time()) * 1000000
-    #print('KERNEL CALL')
-    #print(end_t - st_t)
     
     st_t <- as.numeric(Sys.time()) * 1000000
     if (sparse) {
