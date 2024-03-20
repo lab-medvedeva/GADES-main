@@ -172,7 +172,7 @@ extern "C" void matrix_Euclidean_distance_different_blocks_cpu(double* a, double
   float *d_array2 = new float[array_size2];
 
   std::memcpy(d_array, array_new, array_size * sizeof(float));
-  std::memcpy(d_array2, array2_new, array_size * sizeof(float));
+  std::memcpy(d_array2, array2_new, array_size2 * sizeof(float));
 
   //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   unsigned int * h_result = new unsigned int[( * m) * ( * m_b)];
@@ -216,7 +216,7 @@ extern "C" void  matrix_Kendall_distance_different_blocks_cpu(double* a, double*
   }
 
   float * d_array = new float[array_size];
-  float *d_array2 = new float[array_size];
+  float *d_array2 = new float[array_size2];
 
   std::memcpy(d_array, array_new, array_size * sizeof(float));
   std::memcpy(d_array2, array2_new, array_size2 * sizeof(float));
@@ -242,7 +242,7 @@ extern "C" void  matrix_Kendall_distance_different_blocks_cpu(double* a, double*
   }
 
 
-  for (int i = 0; i < ( * m) * ( * m); ++i) {
+  for (int i = 0; i < ( * m) * ( * m_b); ++i) {
     c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
   }
   free(h_result);
@@ -266,7 +266,7 @@ extern "C" void  matrix_Pearson_distance_different_blocks_cpu(double* a, double*
   float *d_array2 = new float[array_size2];
 
   std::memcpy(d_array, array_new, array_size * sizeof(float));
-  std::memcpy(d_array2, array2_new, array_size * sizeof(float));
+  std::memcpy(d_array2, array2_new, array_size2 * sizeof(float));
 
   float * h_scalar = new float[( * m) * ( * m_b)];
   std::memset(h_scalar, 0, ( * m) * ( * m_b) * sizeof(float));
