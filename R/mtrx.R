@@ -1,8 +1,11 @@
 .onLoad <- function(libname, pkgname) {
    library.dynam('mtrx', package = 'GADES', lib.loc = NULL)
    library.dynam('mtrx_cpu', package = 'GADES', lib.loc = NULL)
+   .C("check_gpu", PACKAGE="mtrx")
    library(glue)
 }
+
+
 
 
 #' Function to process batch from shared objects for GPU.
@@ -15,7 +18,7 @@
 #' @return A list of correlation matrix, batch_a size and batch_b size.
 #' @export
 process_batch <- function(count_matrix, first_index, second_index, batch_size, metric,  sparse = F) {
-    library(glue)
+    start = as.numeric(Sys.time()) * 1000000
     if (sparse) {
         postfix <- '_sparse'
     } else {
@@ -51,11 +54,16 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
     batch_a_size <- first_right_border - first_index
     batch_b_size <- second_right_border - second_index
-    
-    st_t <- as.numeric(Sys.time()) * 1000000
+
+    stop = as.numeric(Sys.time()) * 1000000
+
+    start_t <- as.numeric(Sys.time()) * 1000000
     if (sparse) {
         count_submatrix_a <- as(count_submatrix_a, "RsparseMatrix")
         count_submatrix_b <- as(count_submatrix_b, "RsparseMatrix")
+
+        stop = as.numeric(Sys.time()) * 1000000
+        print(glue("{stop - start}: prepare + Rsparse"))
 
         a_positions <- count_submatrix_a@p
         a_index <- count_submatrix_a@j
@@ -143,16 +151,13 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
         else {
             fn_name <-glue("matrix_Kendall{postfix}_distance_different_blocks_cpu")
         }
-       #fn_name <- "matrix_Kendall_distance_different_blocks_cpu"
     }
-    # print(fn_name)
     first_right_border <- min(first_index + batch_size, ncol(count_matrix))
     second_right_border <- min(second_index + batch_size, ncol(count_matrix))
 
     first_start <- first_index + 1
     second_start <- second_index + 1
     count_submatrix_a <- count_matrix[, c(first_start:first_right_border)]
-    # print(dim(count_matrix))
 
     count_submatrix_b <- count_matrix[, c(second_start:second_right_border)]
 
@@ -221,9 +226,12 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 #' @export
 mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu", sparse = F, write=F)
 {
+  if (sparse) {
+    a <- as(a, 'CsparseMatrix')
+  }
   n <- nrow(a)
   m <- ncol(a)
-  
+  print(filename)
   if (filename == ""){
     result_overall <- double(m * m)
     dim(result_overall) <- c(m, m)
@@ -234,7 +242,7 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
   for (first_index in seq(0, m - 1, by=batch_size)) {
 
     for (second_index in seq(0, m - 1, by=batch_size)) {
-        st_t <- as.numeric(Sys.time()) * 1000000
+        start_t <- as.numeric(Sys.time()) * 1000000
         if (first_index > second_index) {
             a_left = first_index + 1
             b_left = second_index + 1
@@ -278,8 +286,6 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
             }
         }
         end_t <- as.numeric(Sys.time()) * 1000000
-        print('GC called')
-        print(gc())
     }
   }
   if (write) {
@@ -289,26 +295,3 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
   return (TRUE)
 }
 
-#' get matrix from file.
-#' 
-#' @param filename File path for csv.
-#' @return data countmatrix data.
-#' @export
-mtrx_read_kdm <- function(filename){
-  MATRIXFILE <- file(filename, "rb")
-  m <- readBin(MATRIXFILE, integer(), n = 1, size = 4)
-  print(m)
-  names <- readBin(MATRIXFILE, character(), m)
-  print(names)
-  data <- matrix(c(0), ncol = m, nrow = m)
-  for (i in 1:(m-1)){
-    datasample <- readBin(MATRIXFILE, numeric(), n = m-i, size = 8)
-    print(datasample)
-    data[i,(i+1):m] <- datasample
-    data[(i+1):m,i] <- datasample
-  }
-  close(MATRIXFILE)
-  colnames(data) <- names
-  rownames(data) <- names
-  return(data)
-}

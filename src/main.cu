@@ -13,15 +13,52 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-__global__ void Rkendall_gpu_atomic(const double* col1, const double* col2, const int n, const int m, unsigned long long* R){
-  int row1 = blockIdx.y * blockDim.y + threadIdx.y;
-  int row2 = blockIdx.x * blockDim.x + threadIdx.x;
-  if (row1 < row2 && row2 < n){
-    if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
-      atomicAdd(R, 1);
+__global__ void FinalizePearson(int columns, float* results, float* x_squares, float* y_squares) {
+    int row_index = blockDim.x * blockIdx.x + threadIdx.x;
+    int column_index = blockDim.y * blockIdx.y + threadIdx.y;
+
+    int index = row_index * columns + column_index;
+
+    if ((row_index < columns) && (column_index < columns)) {
+        if (row_index < column_index) {
+            results[index] = 1.0 - results[index] / sqrtf(x_squares[index]) / sqrtf(y_squares[index]);
+        } else if (row_index > column_index) {
+            results[index] = results[columns * column_index + row_index];
+        }
     }
-  }
 }
+
+__global__ void FinalizePearsonSparse(int columns, float* results, float* squares) {
+    int row_index = blockDim.x * blockIdx.x + threadIdx.x;
+    int column_index = blockDim.y * blockIdx.y + threadIdx.y;
+
+    int index = row_index * columns + column_index;
+
+    if ((row_index < columns) && (column_index < columns)) {
+        if (row_index < column_index) {
+            results[index] = 1.0 - results[index] / sqrtf(squares[row_index]) / sqrtf(squares[column_index]);
+        } else if (row_index > column_index) {
+            results[index] = results[columns * column_index + row_index];
+        }
+    }
+}
+
+
+__global__ void FinalizeEuclidean(int columns, float* results) {
+    int row_index = blockDim.x * blockIdx.x + threadIdx.x;
+    int column_index = blockDim.y * blockIdx.y + threadIdx.y;
+
+    int index = row_index * columns + column_index;
+
+    if ((row_index < columns) && (column_index < columns)) {
+        if (row_index < column_index) {
+            results[index] = sqrtf(results[index]);
+        } else if (row_index > column_index) {
+            results[index] = results[columns * column_index + row_index];
+        }
+    }
+}
+
 
 __global__ void Rkendall_gpu_atomic_float(float* array, const int n, const int m, unsigned int* result) {
   
@@ -42,14 +79,13 @@ __global__ void Rkendall_gpu_atomic_float(float* array, const int n, const int m
 
           if ((col1[row1] - col1[row2]) * (col2[row1] - col2[row2]) < 0){
             atomicAdd(result + col1_num * m + col2_num, 1);
-//              atomicAdd(result + col2_num * m + col1_num, 1);
           }
       }
   }
 }
 
 
-__global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int m, unsigned int* result) {
+__global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int m, float* result) {
   
   int row = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -62,7 +98,6 @@ __global__ void Reuclidean_gpu_atomic_float(float* array, const int n, const int
             float diff = col1[row] - col2[row];
             diff = diff * diff;
             atomicAdd(result + col1_num * m + col2_num, diff);
-            atomicAdd(result + col2_num * m + col1_num, diff);
 
           }
       }
@@ -89,7 +124,7 @@ __global__ void Rkendall_gpu_atomic_float_different_blocks(float* array, float* 
   }
 }
 
-__global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result) {
+__global__ void Reuclidean_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, float* result) {
   
   int row = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -127,15 +162,12 @@ __global__ void RpearsonCorr_gpu_atomic_float_same_block(
           if (row < n) {
             float diff = col1[row] * col2[row];
             atomicAdd(scalar_product + col1_num * m + col2_num, diff);
-            atomicAdd(scalar_product + col2_num * m + col1_num, diff);
 
             float x_element_norm = col1[row] * col1[row];
             float y_element_norm = col2[row] * col2[row];
 
             atomicAdd(x_norm + col1_num * m + col2_num, x_element_norm);
-            atomicAdd(x_norm + col2_num * m + col1_num, x_element_norm);
             atomicAdd(y_norm + col1_num * m + col2_num, y_element_norm);
-            atomicAdd(y_norm + col2_num * m + col1_num, y_element_norm);
 	
           }
       }
@@ -165,37 +197,6 @@ __global__ void RpearsonCorr_gpu_atomic_float_different_blocks(float* array, flo
 	}
 }
 
-__global__ void RpearsonChi_gpu_atomic_float_different_blocks(float* array, float* array2, const int n, const int m, const int m_b, unsigned int* result){
-  //int i,j,k;
-  //int row1 = blockIdx.y * blockDim.y + threadIdx.y;
-	//int row2 = blockIdx.x* blockDim.x + threadIdx.x;
-  float epsilon = 0.01;
-  int row = blockIdx.x * blockDim.x + threadIdx.x;
-
-
-  for (int col1_num = 0; col1_num < m; ++col1_num) {
-    for (int col2_num = 0; col2_num < m_b; ++col2_num) {
-      float* col1 = array + n * col1_num;
-      float* col2 = array2 + n * col2_num;
-      if (row < m) {
-        if(col2[row]==0.0){
-          
-          float diff = col1[row] - col2[row];
-          diff = diff * diff;
-          diff = diff/epsilon;
-          //atomicAdd(result + col1_num * m + col2_num, diff);
-          atomicAdd(result + col2_num * m + col1_num, diff);
-        } else {
-          float diff = col1[row] - col2[row];
-          diff = diff * diff;
-          diff = diff/col2[row];
-          //atomicAdd(result + col1_num * m + col2_num, diff);
-          atomicAdd(result + col2_num * m + col1_num, diff);
-        }
-      }
-    }
-  }
-}
 
 extern "C" bool check_gpu() {
     cudaDeviceProp deviceProp;
@@ -236,12 +237,6 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC * 1000.0;
   Rprintf("%lf create array time \n", cpu_time_used);
 
-  //cudaEventCreate(&start);
-  //cudaEventCreate(&stop1);
-  //cudaEventCreate(&stop2);
-  //cudaEventCreate(&stop3);
-  //cudaEventRecord(start);
-  
   
   float* d_array;
 
@@ -252,14 +247,10 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   Rprintf("%lf create event and record \n", cpu_time_used);
 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
-  //cudaEventRecord(stop1);
-  //cudaEventSynchronize(stop1);
   end = clock();
   cpu_time_used = ((double) (end - start_1)) / CLOCKS_PER_SEC * 1000;
   Rprintf("%lf stop1 time \n", cpu_time_used);
-  //cudaEventElapsedTime(&milliseconds, start, stop1);
 
-  //Rprintf("%f memcpy\n", milliseconds);
   int threads = 32;
   int blocks_in_row = (*n + threads - 1) / threads;
   int blocks_in_col = (*n + threads - 1) / threads;
@@ -272,12 +263,6 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   cudaMalloc(&d_result, (*m) * (*m) * sizeof(unsigned int));
   cudaMemset(d_result, 0, (*m) * (*m) * sizeof(unsigned int));
 
-  //cudaEventRecord(stop2);
-  //cudaEventSynchronize(stop2);
-
-  //cudaEventElapsedTime(&milliseconds, start, stop2);
-
-  // Rprintf("%f memset\n", milliseconds);
 
   Rkendall_gpu_atomic_float<<<BLOCKS, THREADS>>>(d_array, *n, *m, d_result);
 
@@ -292,7 +277,7 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
       } else if (row_index > column_index) {
         c[i] = c[column_index * (*m) + row_index];
       } else {
-        c[i] = 1.0;
+        c[i] = 0.0;
       }
   }
   free(array_new);
@@ -339,24 +324,25 @@ extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* no
 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 256;
+  int threads = 128;
   int blocks_in_row = (*n + threads - 1) / threads;
   //int blocks_in_col = *n;
 
 
-  unsigned int* d_result;
-  unsigned int* h_result = new unsigned int[(*m) * (*m)];
-  cudaMalloc(&d_result, (*m) * (*m) * sizeof(unsigned int));
-  cudaMemset(d_result, 0, (*m) * (*m) * sizeof(unsigned int));
+  float* d_result;
+  float* h_result = new float[(*m) * (*m)];
+  cudaMalloc(&d_result, (*m) * (*m) * sizeof(float));
+  cudaMemset(d_result, 0, (*m) * (*m) * sizeof(float));
 
   Reuclidean_gpu_atomic_float<<<blocks_in_row, threads>>>(d_array, *n, *m, d_result);
 
+  int columns = *m;
+  dim3 block_size(32, 32);
+  dim3 num_blocks((columns + 31) / 32, (columns + 31) / 32);
+
+  FinalizeEuclidean<<<num_blocks, block_size>>>(columns, d_result);
+
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
-
-
-  for (int i = 0; i < (*m) * (*m); ++i) {
-    c[i] = sqrtf(h_result[i]);
-  }
 
   free(h_result);
   free(array_new);
@@ -400,7 +386,7 @@ extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, d
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 16;
+  int threads = 32;
   int blocks_in_row = (*n + threads - 1) / threads;
   int blocks_in_col = (*n + threads - 1) / threads;
 
@@ -463,14 +449,14 @@ extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b,
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 256;
+  int threads = 128;
   int blocks_in_row = (*n + threads - 1) / threads;
   //int blocks_in_col = *n ;
 
-  unsigned int* d_result;
-  unsigned int* h_result = new unsigned int[(*m) * (*m_b)];
-  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(unsigned int));
-  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(unsigned int));
+  float* d_result;
+  float* h_result = new float[(*m) * (*m_b)];
+  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(float));
+  cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(float));
 
   Reuclidean_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(d_array, d_array2, *n, *m, *m_b, d_result);
 
@@ -488,6 +474,8 @@ extern "C" void matrix_Euclidean_distance_different_blocks(double* a, double* b,
   cudaFree(d_array);
   cudaFree(d_array2);
 }
+
+
 
 //' Driver Function for calculation of Pearson matrix for same block.
 //'
@@ -523,7 +511,7 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   // cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 256;
+  int threads = 128;
   int blocks = (*n + threads - 1) / threads;
   // int blocks_in_col = (*n + threads - 1) / threads;
 
@@ -553,32 +541,19 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
     d_x_norm_result,
     d_y_norm_result
   );
+  int columns = (*m);
+
+  dim3 block_size(32, 32);
+  dim3 num_blocks((columns + 31) / 32, (columns + 31) / 32);
+
+  FinalizePearson<<<num_blocks, block_size>>>(columns, d_result, d_x_norm_result, d_y_norm_result);
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_x_norm_result, d_x_norm_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
-  cudaMemcpy(h_y_norm_result, d_y_norm_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
-  int j=0;
-  for (int i = 0; i < (*m) * (*m); ++i) {
-    // printf("%4.2f ",h_result[i]);
-    
-    if(!isnan(h_result[i])){
-      //if (i == 1 || i == (*m)) {
-      //  printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
-      //}
-      if (i == j * (*m+1)){
-       c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
-       j++;  
-      } else {
-        c[i] = 1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
-      }
-    }
-  }
   free(array_new);
   free(h_result);
   cudaFree(d_result);
   cudaFree(d_x_norm_result);
   cudaFree(d_y_norm_result);
   cudaFree(d_array);
-  // cudaFree(d_array2);
 }
 
 //' Driver Function for calculation of Pearson matrix for different block.
@@ -615,11 +590,11 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
-  int threads = 16;
+  int threads = 128;
   int blocks_in_row = (*n + threads - 1) / threads;
-  int blocks_in_col = (*n + threads - 1) / threads;
+  int blocks_in_col = 1;
 
-  dim3 THREADS(threads, threads);
+  dim3 THREADS(threads, 1);
   dim3 BLOCKS(blocks_in_row, blocks_in_col);
 
 //  float* d_result;
@@ -647,12 +622,8 @@ extern "C" void matrix_Pearson_distance_different_blocks(double* a, double * b /
   
   int j=0;
   for (int i = 0; i < (*m) * (*m_b); ++i) {
-    // printf("%4.2f ",h_result[i]);
     
     if(!isnan(h_scalar[i])){
-      //if (i == 1 || i == (*m)) {
-      //  printf("%f %f %f\n", h_result[i], h_x_norm_result[i], h_y_norm_result[i]);
-      //}
       if (i == j * (*m+1)){
        c[i] = 0.0; //1.0 - h_result[i] / sqrtf(h_x_norm_result[i]) / sqrtf(h_y_norm_result[i]);
        j++;  
@@ -712,17 +683,14 @@ __global__ void ReuclideanSparse_gpu_atomic_float_same_block(
 
                 for (int left = prev_col + 1; left < col1; ++left) {
                     atomicAdd(&result[left * columns + col2], value2 * value2);
-                    atomicAdd(&result[col2 * columns + left], value2 * value2);
                 }
 
                 for (int right = col2 + 1; right < next_col; ++right) {
-                    atomicAdd(&result[right * columns + col1], value1 * value1);
                     atomicAdd(&result[col1 * columns + right], value1 * value1);
                 }
 		// using diff calculation directcly passing to n,m col directly
                 float diff = (value1 - value2) * (value1 - value2);
                 atomicAdd(&result[col1 * columns + col2], diff);
-                atomicAdd(&result[col2 * columns + col1], diff);
             }
         }
     }
@@ -763,23 +731,29 @@ extern "C" void matrix_Euclidean_sparse_distance_same_block(
     cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemset(d_result, 0, columns * columns * sizeof(float));
 
-    int threadsPerBlock = 256;
+    int threadsPerBlock = 128;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
 
     ReuclideanSparse_gpu_atomic_float_same_block<<<blocksPerGrid, threadsPerBlock>>>(
         d_a_index, d_a_positions, d_a_values, rows, columns, d_result);
 
-    cudaMemcpy(float_result, d_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
+    gpuErrchk( cudaPeekAtLastError() );
+    
+    dim3 block_size(32, 32);
+    dim3 num_blocks((columns + 31) / 32, (columns + 31) / 32);
 
-    for (int i = 0; i < columns * columns; ++i) {
-        result[i] = std::sqrt(float_result[i]);
-    }
+    FinalizeEuclidean<<<num_blocks, block_size>>>(columns, d_result);
+    gpuErrchk( cudaPeekAtLastError() );
+
+    cudaMemcpy(float_result, d_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
+    gpuErrchk( cudaPeekAtLastError() );
+
 
     cudaFree(d_a_index);
     cudaFree(d_a_positions);
     cudaFree(d_a_values);
     cudaFree(d_result);
-
+    gpuErrchk(cudaPeekAtLastError());
     delete[] a_values;
     delete[] float_result;
 }
@@ -791,7 +765,6 @@ __global__ void ReuclideanSparse_gpu_atomic_float_different_blocks(
     int rows, int columns, int columns_b, float* result) {
 
     int row_index = blockIdx.x * blockDim.x + threadIdx.x;
-
     if (row_index < rows) {
         int start_column = a_positions[row_index];
         int end_column = a_positions[row_index + 1];
@@ -805,7 +778,6 @@ __global__ void ReuclideanSparse_gpu_atomic_float_different_blocks(
             float value1 = (col1_index < end_column) ? a_double_values[col1_index] : 0.0f;
 
             int col1 = (col1_index < end_column) ? a_index[col1_index] : columns;
-
             for (int col2_index = start_column_b; col2_index <= end_column_b; ++col2_index) {
                 int prev_col_b_index = col2_index - 1;
                 int prev_col2 = (prev_col_b_index >= start_column_b) ? b_index[prev_col_b_index] : -1;
@@ -871,30 +843,35 @@ extern "C" void matrix_Euclidean_sparse_distance_different_blocks(
     float* d_b_values;
     float* d_result;
 
+    gpuErrchk(cudaPeekAtLastError());
     cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
     cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
     cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
-    cudaMalloc(&d_b_index, num_elements_a_int * sizeof(int));  // Use the same size as 'a' since 'b' is not used in this version
+    cudaMalloc(&d_b_index, num_elements_b_int * sizeof(int));  // Use the same size as 'a' since 'b' is not used in this version
     cudaMalloc(&d_b_positions, (rows + 1) * sizeof(int));       // Use the same size as 'a' since 'b' is not used in this version
     cudaMalloc(&d_b_values, num_elements_b_int * sizeof(float)); // Use the same size as 'a' since 'b' is not used in this version
     cudaMalloc(&d_result, columns * columns_b * sizeof(float));
+    gpuErrchk(cudaPeekAtLastError());
 
-    cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b_index, d_a_index, num_elements_a_int * sizeof(int), cudaMemcpyDeviceToDevice);  // Use the same data for 'b' as they are not used
-    cudaMemcpy(d_b_positions, d_a_positions, (rows + 1) * sizeof(int), cudaMemcpyDeviceToDevice);  // Use the same data for 'b' as they are not used
-    cudaMemcpy(d_b_values, d_a_values, num_elements_a_int * sizeof(float), cudaMemcpyDeviceToDevice); // Use the same data for 'b' as they are not used
-    cudaMemset(d_result, 0, columns * columns_b * sizeof(float));
+    gpuErrchk(cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_a_values, a_values, num_elements_a_int * sizeof(float), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_b_index, b_index, num_elements_b_int * sizeof(int), cudaMemcpyHostToDevice));  // Use the same data for 'b' as they are not used
+    gpuErrchk(cudaMemcpy(d_b_positions, b_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice));  // Use the same data for 'b' as they are not used
+    gpuErrchk(cudaMemcpy(d_b_values, b_values, num_elements_b_int * sizeof(float), cudaMemcpyHostToDevice)); // Use the same data for 'b' as they are not used
+    gpuErrchk(cudaMemset(d_result, 0, columns * columns_b * sizeof(float)));
 
-    int threadsPerBlock = 256;
+    gpuErrchk(cudaPeekAtLastError());
+    int threadsPerBlock = 128;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
 
     ReuclideanSparse_gpu_atomic_float_different_blocks<<<blocksPerGrid, threadsPerBlock>>>(
         d_a_index, d_a_positions, d_a_values,
         d_b_index, d_b_positions, d_b_values, rows, columns, columns_b, d_result);
 
+    gpuErrchk( cudaPeekAtLastError() );
     cudaMemcpy(float_result, d_result, columns * columns_b * sizeof(float), cudaMemcpyDeviceToHost);
+    gpuErrchk( cudaPeekAtLastError() );
 
     for (int i = 0; i < columns * columns_b; ++i) {
         result[i] = std::sqrt(float_result[i]);
@@ -921,7 +898,6 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_different_blocks(
     float* squares_a, float* squares_b) {
 
     int row_index = blockIdx.x * blockDim.x + threadIdx.x;
-
     if (row_index < rows) {
         int start_column = a_positions[row_index];
         int end_column = a_positions[row_index + 1];
@@ -952,16 +928,6 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_different_blocks(
             
             float value2 = b_double_values[col2_index];
             int col2 = b_index[col2_index];
-
-            // printf(
-            //   "ROW: %d %d %d %d %d %f\n",
-            //   row_index,
-            //   start_column_b,
-            //   col2_index,
-            //   end_column_b,
-            //   col2,
-            //   value2
-            // );
 
             atomicAdd(&squares_b[col2], value2 * value2);
         }
@@ -1036,13 +1002,15 @@ extern "C" void matrix_Pearson_sparse_distance_different_blocks(
     cudaMemcpy(d_b_index, b_index, num_elements_b_int * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_b_positions, b_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = 256;
+    int threadsPerBlock = 128;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
 
     RpearsonSparseCorr_gpu_atomic_float_different_blocks<<<blocksPerGrid, threadsPerBlock>>>(
         d_a_index, d_a_positions, d_a_values,
         d_b_index, d_b_positions, d_b_values,
         d_float_result, rows, columns, columns_b, d_squares_a, d_squares_b);
+    
+    gpuErrchk( cudaPeekAtLastError() );
 
     cudaMemcpy(float_result, d_float_result, columns * columns_b * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -1078,28 +1046,19 @@ __global__ void RpearsonSparseCorr_gpu_atomic_float_same_block(
     float* result, int rows, int columns, float* squares) {
 
     int row_index = blockIdx.x * blockDim.x + threadIdx.x;
-    // printf("%d %d\n", row_index, rows);
     if (row_index < rows) {
-        // printf("Inside kernel\n");
         int start_column = a_positions[row_index];
         int end_column = a_positions[row_index + 1];
-        // printf("Test: %d %d\n", start_column, end_column);
         for (int col1_index = start_column; col1_index < end_column; ++col1_index) {
-            // printf("Here\n");
-            int prev_col_index = col1_index - 1;
-            int prev_col = (prev_col_index >= start_column) ? a_index[prev_col_index] : -1;
             int col1 = a_index[col1_index];
             float value1 = a_double_values[col1_index];
             atomicAdd(&squares[col1], value1 * value1);
             
             for (int col2_index = col1_index + 1; col2_index < end_column; ++col2_index) {
-                int next_col_index = col2_index + 1;
-                int next_col = (next_col_index < end_column) ? a_index[next_col_index] : columns;
                 int col2 = a_index[col2_index];
                 float value2 = a_double_values[col2_index];
                 
                 atomicAdd(&result[col1 * columns + col2], value1 * value2);
-                atomicAdd(&result[col2 * columns + col1], value1 * value2);
             }
         }
     }
@@ -1146,11 +1105,6 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
     int* d_a_index;
     int* d_a_positions;
 
-    // std::cout << rows << std::endl;
-    // for (int i = 0; i < rows; ++i) {
-    //   std::cout << a_positions[i] << " ";
-    // }
-    // std::cout << std::endl;
 
     cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
     cudaMalloc(&d_float_result, columns * columns * sizeof(float));
@@ -1164,7 +1118,7 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
     cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = 256;
+    int threadsPerBlock = 128;
     int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
     
 
@@ -1173,15 +1127,18 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
         //b_index, b_positions, d_a_values,  // Use the same values for 'b' as they are not used in this version
         d_float_result, rows, columns, d_squares);
 
+    gpuErrchk( cudaPeekAtLastError() );
+    dim3 block_size(32, 32);
+    dim3 num_blocks((columns + 31) / 32, (columns + 31) / 32);
+
+    FinalizePearsonSparse<<<num_blocks, block_size>>>(columns, d_float_result, d_squares);
+
+    gpuErrchk( cudaPeekAtLastError() );
     cudaMemcpy(float_result, d_float_result, columns * columns * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(squares, d_squares, columns * sizeof(float), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < columns * columns; ++i) {
-        int row_index = i / columns;
-        int column_index = i % columns;
-        if (row_index != column_index) {
-            result[i] = 1.0f - float_result[i] / sqrtf(squares[row_index]) / sqrtf(squares[column_index]);
-        }
-    }
+
+    gpuErrchk( cudaPeekAtLastError() );
+
+
 
     cudaFree(d_a_values);
     cudaFree(d_float_result);
@@ -1264,16 +1221,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
-                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
-              //else {
-                //atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                //atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // concordant[a_index[left] * columns + a_index[right]] += 1;
-                // concordant[a_index[right] * columns + a_index[left]] += 1;
-              //}
             }
         }
       }
@@ -1285,16 +1233,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
-                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
-              //else {
-              //  atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-              //  atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // concordant[a_index[left] * columns + a_index[right]] += 1;
-                // concordant[a_index[right] * columns + a_index[left]] += 1;
-              //}
             }
         }
       }
@@ -1304,16 +1243,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
               float product = a_values[left] * a_values[right];
               if (product < 0) {
                 atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-                // atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // disconcordant[a_index[left] * columns + a_index[right]] += 1;
-                // disconcordant[a_index[right] * columns + a_index[left]] += 1;
               } 
-              //else {
-              //  atomicAdd(concordant + a_index[left] * columns + a_index[right], 1);
-              //  atomicAdd(concordant + a_index[right] * columns + a_index[left], 1);
-                // concordant[a_index[left] * columns + a_index[right]] += 1;
-                // concordant[a_index[right] * columns + a_index[left]] += 1;
-              //}
             }
         }
       
@@ -1323,38 +1253,22 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_same_block(
       float left_diff = left_value - a_values[col1_index];
       float right_diff = right_value - a_values[col2_index];
       float product = left_diff * right_diff;
-      //if (product > 0) {
-      //  atomicAdd(concordant + col1 * columns + col2, 1);
-      //  atomicAdd(concordant + col2 * columns + col1, 1);
-      //} else 
       if (product < 0) {
         atomicAdd(concordant + col1 * columns + col2, 1);
-        // atomicAdd(concordant + col2 * columns + col1, 1);
       }
       
       for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
         product = left_diff * a_values[right];
         if (product < 0) {
           atomicAdd(concordant + col1 * columns + a_index[right], 1);
-          //atomicAdd(concordant + a_index[right] * columns + col1, 1);
         } 
-        //else if (product > 0) {
-        //  atomicAdd(concordant + col1 * columns + a_index[right], 1);
-        //  atomicAdd(concordant + a_index[right] * columns + col1, 1);
-        //}
       }
           
       for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
-        // std::cout << a_index[left] << " " << a_index[col2_index] << std::endl;
         product = right_diff * a_values[left];
         if (product < 0) {
           atomicAdd(concordant + a_index[left] * columns + col2, 1);
-          //atomicAdd(concordant + col2 * columns + a_index[left], 1);
         }
-        //else if (product > 0) {
-        //  atomicAdd(concordant + a_index[left]* columns + col2, 1);
-        //  atomicAdd(concordant + col2 * columns + a_index[left], 1);
-        //}
       }
 
       right_activated = false;
@@ -1445,7 +1359,7 @@ extern "C" void matrix_Kendall_sparse_distance_same_block(
       } else if (row_index > column_index) {
         result[i] = result[column_index * columns + row_index];
       } else {
-        result[i] = 1.0;
+        result[i] = 0.0;
       }
     }
 
@@ -1467,6 +1381,7 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_different_blocks(
   if (row_index >= row_jndex || row_jndex >= rows) {
     return;
   }
+
   int start_column = a_positions[row_index];
   int end_column = a_positions[row_index + 1];
   int start_column_down = a_positions[row_jndex];
@@ -1482,7 +1397,6 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_different_blocks(
   int left_down1_threshold = start_column_down;
   bool left_activated = false;
   bool right_activated = false;
-  // std::cout << "BEFORE THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
 
   for (int col1_index = start_column; col1_index <= end_column; ++col1_index) {
     int prev_col_index = col1_index - 1;
@@ -1525,8 +1439,6 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_different_blocks(
               }
             }
         }
-      // std::cout << "COL" << col1 << " " << col2 << std::endl;
-      // std::cout << "THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
       
       float left_value = (left_activated) ? a_values[right_down1_threshold] : 0;
       float right_value = (right_activated) ? b_values[left_down2_threshold - 1] : 0;
@@ -1536,26 +1448,20 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_different_blocks(
       
       float left_diff = left_value - value1;
       float product = left_diff * right_diff;
-      if (product > 0) {
+      if (product < 0) {
         atomicAdd(concordant + col2 * columns + col1, 1);
-      } else if (product < 0) {
-        atomicAdd(concordant + col2 * columns + col1, -1);
-      }
+      } 
       
       for (int right = left_down2_threshold; right < right_down2_threshold; ++right) {
         product = left_diff * b_values[right];
         if (product < 0) {
-          atomicAdd(concordant + b_index[right] * columns + col1, -1);
-        } else if (product > 0) {
           atomicAdd(concordant + b_index[right] * columns + col1, 1);
-        }
+        } 
       }
           
       for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
         product = right_diff * a_values[left];
         if (product < 0) {
-          atomicAdd(concordant + col2 * columns + a_index[left], -1);
-        } else if (product > 0) {
           atomicAdd(concordant + col2 * columns + a_index[left], 1);
         }
       }
@@ -1665,43 +1571,4 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks(
     delete[] h_concordant;
 }
 
-//========================================================================================
 
-extern "C" void file_Kendall_distance(double* a, int* n, int* m, char** fout){
-  std::ofstream RESULTFILE(*fout, std::ios::binary|std::ios::app);
-  size_t dataset_column_size = *n * sizeof(double);
-  size_t reverse_max_size = sizeof(unsigned long long);
-  for (int col1 = 0; col1 < *m; col1++){
-    double* first_column_device_ptr;
-    cudaMalloc(&first_column_device_ptr, dataset_column_size);
-    cudaMemcpy(first_column_device_ptr, a + col1 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-    for (int col2 = col1 + 1; col2 < *m; col2 ++){
-      double* second_column_device_ptr;
-      cudaMalloc(&second_column_device_ptr, dataset_column_size);
-      cudaMemcpy(second_column_device_ptr, a + col2 * *n, dataset_column_size, cudaMemcpyHostToDevice);
-      unsigned long long host_R = 0;
-      unsigned long long* device_R;
-      cudaMalloc(&device_R, reverse_max_size);
-      cudaMemcpy(device_R, &host_R, reverse_max_size, cudaMemcpyHostToDevice);
-      int threads = 16;
-      int blocks_in_row = (*n + threads - 1) / threads;
-      int blocks_in_col = (*n + threads - 1) / threads;
-
-      dim3 THREADS(threads, threads);
-      dim3 BLOCKS(blocks_in_row, blocks_in_col);
-
-      Rkendall_gpu_atomic<<<BLOCKS, THREADS>>>(first_column_device_ptr, second_column_device_ptr, *n, *m, device_R);
-      cudaDeviceSynchronize();
-
-      cudaMemcpy(&host_R, device_R, reverse_max_size, cudaMemcpyDeviceToHost);
-
-      double distance = host_R * 2.0 / *n / (*n - 1);
-      RESULTFILE.write((char*)&distance, sizeof(distance));
-
-      cudaFree(second_column_device_ptr);
-      cudaFree(device_R);
-    }
-    cudaFree(first_column_device_ptr);
-  }
-  RESULTFILE.close();
-}
