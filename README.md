@@ -4,7 +4,7 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 
 ## Prerequisities
 
-* R 4.0.0+
+* R 4.3.0+
 * CMake 3.10+
 * (Optional) CUDA 11+
 
@@ -15,7 +15,7 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 Please, install [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) first.
 
 ```shell
-docker run --gpus all --name gades-gpu akhtyamovpavel/gades:gpu
+docker run --name gades --gpus all -it akhtyamovpavel/gades-gpu
 ```
 
 ### Local installation
