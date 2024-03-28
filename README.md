@@ -51,6 +51,7 @@ dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='g
 ### Sparse mode
 ```R
 library(GADES)
+library(Matrix)
 
 mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
 
@@ -60,6 +61,7 @@ dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='c
 ### Sparse mode - GPU
 ```R
 library(GADES)
+library(Matrix)
 mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
 dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T, write=T)
 ```
