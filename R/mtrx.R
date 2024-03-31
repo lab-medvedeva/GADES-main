@@ -1,8 +1,16 @@
 .onLoad <- function(libname, pkgname) {
-   library.dynam('mtrx', package = 'GADES', lib.loc = NULL)
-   library.dynam('mtrx_cpu', package = 'GADES', lib.loc = NULL)
-   .C("check_gpu", PACKAGE="mtrx")
-   library(glue)
+    gpu_loaded <- tryCatch({
+        library.dynam('mtrx', package = 'GADES', lib.loc = NULL)
+        .C("check_gpu", PACKAGE="mtrx")
+        return(T)
+    }, error = function(cond) {
+        message("GPU Package not installed. You can use only CPU version of the package")
+        return(F)
+    })
+
+    assign("gpu_loaded", gpu_loaded, envir = parent.env(environment()))
+    library.dynam('mtrx_cpu', package = 'GADES', lib.loc = NULL)
+    library(glue)
 }
 
 
@@ -217,15 +225,20 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
 
 #' Function for generating report for distance matric.
 #'
-#' @param a Something.
+#' @param a input matrix of shape FxC
 #' @param filename CSV file.
 #' @param batch_size int.
 #' @param metric string for matric selection.
 #' @param type "gpu" or "cpu".
+#' @param sparse whether Sparse matrix input or not
+#' @param write whether to write output to stdout or not
 #' @return A list of correlation matrix, batch_a size and batch_b size.
 #' @export
 mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall",type="gpu", sparse = F, write=F)
 {
+  if (type == "gpu" && !GADES:::gpu_loaded) {
+    stop("GPU not loaded. Please, install CUDA Toolkit and with your setup")
+  }
   if (sparse) {
     a <- as(a, 'CsparseMatrix')
   }
@@ -252,7 +265,7 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
                 result_overall[c(a_left:a_right), c(b_left:b_right)] = t(result_overall[c(b_left:b_right), c(a_left:a_right)])
             }
         } else {
-            if(type=="gpu"){
+            if (type=="gpu") {
                 result <- process_batch(
                     count_matrix = a,
                     first_index = first_index,
