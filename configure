@@ -14,7 +14,6 @@ pwd
 
 mkdir -p build && cd build
 pwd
-ls ../../
 cmake ../../ \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_SHARED_LIBS:bool=OFF \

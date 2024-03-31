@@ -26,7 +26,6 @@ extern "C" void matrix_Euclidean_distance_same_block_cpu(double * a, double * b,
 
   //CPU Implementation
   for (int row = 0; row < * n; row++) {
-    //Reuclidean_cpu_atomic_float(i,d_array, *n, *m, d_result);
     for (int col1_num = 0; col1_num < * m; ++col1_num) {
       for (int col2_num = col1_num + 1; col2_num < * m; ++col2_num) {
         float * col1 = d_array + * n * col1_num;
@@ -41,14 +40,11 @@ extern "C" void matrix_Euclidean_distance_same_block_cpu(double * a, double * b,
     }
   }
 
-  //std::memcpy(h_result, d_result, ( * m) * ( * m) * sizeof(float));
 
   for (int i = 0; i < ( * m) * ( * m); ++i) {
     c[i] = std::sqrt(h_result[i]); //Using sqrt instead of sqrtf
   }
-  //‘free’ is not a member of ‘std’ in gcc -dref at time of integration build.
   free(h_result);
-  //std::free(d_result);
   free(d_array);
 }
 //=============================================
@@ -64,7 +60,6 @@ extern "C" void matrix_Kendall_distance_same_block_cpu(double * a, double * b, d
 
   std::memcpy(d_array, array_new, array_size * sizeof(float));
 
-  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   unsigned int * h_result = new unsigned int[( * m) * ( * m)];
   std::memset(h_result, 0, ( * m) * ( * m) * sizeof(unsigned int));
 
@@ -87,7 +82,7 @@ extern "C" void matrix_Kendall_distance_same_block_cpu(double * a, double * b, d
   }
   
   for (int i = 0; i < ( * m) * ( * m); ++i) {
-    c[i] = h_result[i] * 2.0f / (*n) / (*n - 1); //Using sqrt instead of sqrtf
+    c[i] = h_result[i] * 2.0f / (*n) / (*n - 1);
   }
   free(h_result);
   free(d_array);
@@ -108,15 +103,12 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(
   }
 
 
-  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   float * h_scalar = new float[( * m) * ( * m)];
   std::memset(h_scalar, 0, ( * m) * ( * m) * sizeof(float));
  
-  //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   float * h_prod1 = new float[( * m) * ( * m)];
   std::memset(h_prod1, 0, ( * m) * ( * m) * sizeof(float));
  
- //unsigned int * d_result = new unsigned int[( * m) * ( * m)];
   float * h_prod2 = new float[( * m) * ( * m)];
   std::memset(h_prod2, 0, ( * m) * ( * m) * sizeof(float));
  
@@ -129,9 +121,6 @@ extern "C" void  matrix_Pearson_distance_same_block_cpu(
         float num = (col1[row] * col2[row]);
         float sum1 = (col1[row] * col1[row]);
         float sum2 = (col2[row] * col2[row]);
-        // if (col1_num == 0 && col2_num == 1) {
-        //   std::cout << row << " " << num << std::endl;
-        // }
         h_scalar[col1_num * * m + col2_num] += num;
         h_prod1[col1_num * * m + col2_num] += sum1;
         h_prod2[col1_num * * m + col2_num] += sum2;
@@ -670,9 +659,6 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
   
   
   for (int row_index = 0; row_index < rows; ++row_index) {
-    if (row_index % 50 == 0) {
-        std::cout << row_index << std::endl;
-    }
 
     int start_column = a_positions[row_index];
 
@@ -734,10 +720,6 @@ extern "C" void matrix_Kendall_sparse_distance_same_block_cpu(
                     disconcordant[a_index[left] * columns + a_index[right]] += 1;
                     disconcordant[a_index[right] * columns + a_index[left]] += 1;
                   } 
-                  //else {
-                  //  concordant[a_index[left] * columns + a_index[right]] += 1;
-                  //  concordant[a_index[right] * columns + a_index[left]] += 1;
-                  //}
                 }
             }
           }
@@ -837,25 +819,14 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
   int columns = *num_columns;
   int columns_b = *num_columns_b;
 
-  //int *concordant = new int[columns * columns_b];
   int *disconcordant = new int[columns * columns_b];
-  //std::memset(concordant, 0, columns * columns_b * sizeof(int));
   std::memset(disconcordant, 0, columns * columns_b * sizeof(int));
   float *a_values = new float[*num_elements_a];
   float *b_values = new float[*num_elements_b];
 
-  // std::cout << "VALUES A" << std::endl;
   for (int i = 0; i < *num_elements_a; ++i) {
     a_values[i] = static_cast<float>(a_double_values[i]);
-    // std::cout << a_values[i] << " "; 
   }
-  // std::cout << std::endl;
-  // std::cout << "POSITIONS A" << std::endl;
-  //  for (int i = 0; i < *num_elements_a; ++i) {
-  //   std::cout << a_index[i] << " "; 
-  // }
-
-  // std::cout << std::endl;
 
   for (int i = 0; i < *num_elements_b; ++i) {
     b_values[i] = static_cast<float>(b_double_values[i]);
@@ -880,7 +851,6 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
       int right_down2_threshold = start_column_down_b;
       bool left_activated = false;
       bool right_activated = false;
-      // std::cout << "BEFORE THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
 
       for (int col1_index = start_column; col1_index <= end_column; ++col1_index) {
         int prev_col_index = col1_index - 1;
@@ -917,13 +887,8 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
                   if (product < 0) {
                     disconcordant[b_index[right] * columns + a_index[left]] += 1;
                   } 
-                  //else {
-                  //  concordant[b_index[right] * columns + a_index[left]] += 1;
-                  //}
                 }
             }
-          // std::cout << "COL" << col1 << " " << col2 << std::endl;
-          // std::cout << "THRESHOLD " << left_down1_threshold << " " << right_down1_threshold << " " << left_down2_threshold << " " << right_down2_threshold << std::endl;
           
           float left_value = (left_activated) ? a_values[right_down1_threshold] : 0;
           float right_value = (right_activated) ? b_values[left_down2_threshold - 1] : 0;
@@ -933,9 +898,6 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
           
           float left_diff = left_value - value1;
           float product = left_diff * right_diff;
-          //if (product > 0) {
-          //    concordant[col2 * columns + col1] += 1;
-          //} else 
           if (product < 0) {
               disconcordant[col2 * columns + col1] += 1;
           }
@@ -945,9 +907,6 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
             if (product < 0) {
               disconcordant[b_index[right] * columns + col1] += 1;
             } 
-            //else if (product > 0) {
-            //  concordant[b_index[right] * columns + col1] += 1;
-            //}
           }
               
           for (int left = left_down1_threshold; left < right_down1_threshold; left++) {
@@ -955,9 +914,6 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
             if (product < 0) {
                 disconcordant[col2 * columns + a_index[left]] += 1;
             } 
-            //else if (product > 0) {
-            //    concordant[col2 * columns + a_index[left]] += 1;
-            //}
           }
 
           right_activated = false;
@@ -969,9 +925,7 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
           }
 
         }
-        // std::cout << "Here" << " " << left_down1_threshold << " " << end_column_down << std::endl;
         while (left_down1_threshold < end_column_down && a_index[left_down1_threshold] <= col1) {
-          // std::cout << "Inside" << std::endl;
           left_down1_threshold += 1;
         }
       }
@@ -981,10 +935,8 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks_cpu(
     result[i] = static_cast<double>(disconcordant[i]) * 2.0f / rows / (rows - 1); 
   }
 
-  //delete[] concordant;
   delete[] disconcordant;
   delete[] a_values;
   delete[] b_values;
-  // std::cout << "Gone" << std::endl;
 }
 
