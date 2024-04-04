@@ -2,12 +2,12 @@
     gpu_loaded <- tryCatch({
         library.dynam('mtrx', package = 'GADES', lib.loc = NULL)
         .C("check_gpu", PACKAGE="mtrx")
-        return(T)
+        message("GPU mode enabled")
+        T
     }, error = function(cond) {
         message("GPU Package not installed. You can use only CPU version of the package")
-        return(F)
+        F
     })
-
     assign("gpu_loaded", gpu_loaded, envir = parent.env(environment()))
     library.dynam('mtrx_cpu', package = 'GADES', lib.loc = NULL)
     library(glue)
