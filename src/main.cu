@@ -343,6 +343,9 @@ extern "C" void matrix_Euclidean_distance_same_block(double* a, double * b /* no
   FinalizeEuclidean<<<num_blocks, block_size>>>(columns, d_result);
 
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < columns * columns; ++i) {
+      c[i] = h_result[i];
+  }
 
   free(h_result);
   free(array_new);
@@ -548,6 +551,10 @@ extern "C" void matrix_Pearson_distance_same_block(double* a, double * b /* not 
 
   FinalizePearson<<<num_blocks, block_size>>>(columns, d_result, d_x_norm_result, d_y_norm_result);
   cudaMemcpy(h_result, d_result, (*m) * (*m) * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < columns * columns; ++i) {
+      c[i] = h_result[i];
+  }
+
   free(array_new);
   free(h_result);
   cudaFree(d_result);
@@ -1138,6 +1145,9 @@ extern "C" void matrix_Pearson_sparse_distance_same_block(
 
     gpuErrchk( cudaPeekAtLastError() );
 
+    for (int i = 0; i < columns * columns; ++i) {
+        result[i] = float_result[i];
+    }
 
 
     cudaFree(d_a_values);
