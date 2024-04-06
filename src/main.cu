@@ -51,12 +51,15 @@ __global__ void FinalizeEuclidean(int columns, float* results) {
     int index = row_index * columns + column_index;
 
     if ((row_index < columns) && (column_index < columns)) {
-        if (row_index < column_index) {
-            results[index] = sqrtf(results[index]);
-        } else if (row_index > column_index) {
+        if (row_index > column_index) {
             results[index] = results[columns * column_index + row_index];
         }
     }
+    __syncthreads();
+    if (row_index < columns && column_index < columns) {
+        results[index] = sqrtf(results[index]);
+    }
+    
 }
 
 
