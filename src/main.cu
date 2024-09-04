@@ -1443,10 +1443,6 @@ __global__ void RkendallSparseCorr_gpu_atomic_float_different_blocks(
               float product = a_values[left] * b_values[right];
               if (product < 0) {
                 atomicAdd(
-                  concordant + b_index[right] * columns + a_index[left], -1
-                );
-              } else {
-                atomicAdd(
                   concordant + b_index[right] * columns + a_index[left], 1
                 );
               }
