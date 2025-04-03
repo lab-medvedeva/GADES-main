@@ -9,20 +9,6 @@
 #include <cstdint>
 //=========================================
 
-template <typename T>
-struct DenseMatrixView
-{
-  T* data;
-  size_t row_num;
-  size_t col_num;
-
-  T& operator()(size_t row, size_t col)
-  {
-    assert(row < row_num && col < col_num);
-    return data[row * col_num + col];
-  }
-};
-
 namespace internal
 {
 
