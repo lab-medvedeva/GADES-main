@@ -9,9 +9,10 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/cmake)
 
 option(GADES_WITH_TSAN "Compile with thread sanitizer" OFF)
 option(GADES_WITH_ASAN "Compile with address sanitizer" OFF)
+option(GADES_BUILD_TESTS "Build and compile tests for GADES" OFF)
 
-set(HWY_SYSTEM_GTEST ON)
-set(HWY_ENABLE_TESTS OFF)
+set(HWY_ENABLE_TESTS OFF CACHE BOOL "")
+set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "")
 
 include(FetchContent)
 FetchContent_Declare(
@@ -30,7 +31,7 @@ add_library(GADES2 SHARED src/GADES.cpp)
 target_link_libraries(GADES2 PRIVATE gades2_templated)
 target_include_directories(GADES2 PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND GADES_BUILD_TESTS)
   if (WITH_TSAN)
     add_compile_options(-fsanitize=thread)
     add_link_options(-fsanitize=thread)
