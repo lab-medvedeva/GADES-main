@@ -10,8 +10,16 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/cmake)
 option(GADES_WITH_TSAN "Compile with thread sanitizer" OFF)
 option(GADES_WITH_ASAN "Compile with address sanitizer" OFF)
 
+set(HWY_SYSTEM_GTEST ON)
 set(HWY_ENABLE_TESTS OFF)
-add_subdirectory(deps/highway/)
+
+include(FetchContent)
+FetchContent_Declare(
+  hwy
+  GIT_REPOSITORY https://github.com/google/highway.git
+  GIT_TAG 1.2.0
+)
+FetchContent_MakeAvailable(hwy)
 
 add_library(gades2_templated INTERFACE)
 target_include_directories(gades2_templated INTERFACE ${PROJECT_SOURCE_DIR}/include/private)
@@ -34,7 +42,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
 
   message("Running a Debug build")
-  include(FetchContent)
   FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -46,7 +53,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   target_link_libraries(
     gades_test
     GTest::gtest_main
-    googletest
+    GADES2
   )
   include(GoogleTest)
   gtest_discover_tests(gades_test)
