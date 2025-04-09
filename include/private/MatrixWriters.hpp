@@ -1,6 +1,5 @@
 #pragma once
 
-#include <span>
 #include "utils.hpp"
 
 class BasicMatrixWriter
