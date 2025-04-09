@@ -17,6 +17,11 @@ void CalcDistanceL1(
     // unknown
     thread_num = std::max(1ul, thread_num);
   }
+  // Probably not the best solution
+  if (thread_num > data.col_num)
+  {
+    thread_num = data.col_num;
+  }
   if (batch_size == 0)
   {
     batch_size = data.col_num / thread_num;
