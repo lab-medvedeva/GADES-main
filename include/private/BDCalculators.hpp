@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include <span>
 #include <cstddef>
 #include "hwy/highway.h"
 #include "hwy/aligned_allocator.h"
