@@ -10,6 +10,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/cmake)
 option(GADES_WITH_TSAN "Compile with thread sanitizer" OFF)
 option(GADES_WITH_ASAN "Compile with address sanitizer" OFF)
 option(GADES_BUILD_TESTS "Build and compile tests for GADES" OFF)
+set(GADES_MARCH "native" CACHE STRING "Which option to use with -march when compiling")
 
 set(HWY_ENABLE_TESTS OFF CACHE BOOL "")
 set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "")
@@ -19,13 +20,14 @@ FetchContent_Declare(
   hwy
   GIT_REPOSITORY https://github.com/google/highway.git
   GIT_TAG 1.2.0
+  EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(hwy)
 
 add_library(gades2_templated INTERFACE)
 target_include_directories(gades2_templated INTERFACE ${PROJECT_SOURCE_DIR}/include/private)
 target_link_libraries(gades2_templated INTERFACE hwy)
-target_compile_options(gades2_templated INTERFACE -march=native)
+target_compile_options(gades2_templated INTERFACE -march=${GADES_MARCH})
 
 add_library(GADES2 SHARED src/GADES.cpp)
 target_link_libraries(GADES2 PRIVATE gades2_templated)
