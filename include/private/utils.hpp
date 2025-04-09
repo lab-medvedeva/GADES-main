@@ -1,8 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <type_traits>
-#include <concepts>
 
 template <typename T>
 struct MatrixView
