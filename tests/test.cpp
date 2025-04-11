@@ -2,6 +2,7 @@
 #include "GADES.hpp"
 #include <vector>
 #include <random>
+#include <cmath>
 
 struct MatrixHolder : testing::Test
 {
@@ -41,7 +42,22 @@ double L1Dist(size_t i, size_t j, MatrixView<const double> matr)
   return res;
 }
 
-void CheckMatrix(MatrixView<const double> matr, size_t thread_num, size_t batch_size)
+double CosineDist(size_t i, size_t j, MatrixView<const double> matr)
+{
+  size_t row_num = matr.row_num;
+  double res = 0.0;
+  double norm_a = 0.0;
+  double norm_b = 0.0;
+  for (size_t row = 0; row < row_num; ++row)
+  {
+    res += matr[i][row] * matr[j][row];
+    norm_a += matr[i][row] * matr[i][row];
+    norm_b += matr[j][row] * matr[j][row];
+  }
+  return res / sqrt(norm_a * norm_b);
+}
+
+void CheckMatrixL1(MatrixView<const double> matr, size_t thread_num, size_t batch_size)
 {
   std::vector<double> res_data(matr.col_num * matr.col_num, 42.0);
   MatrixView<double> res{.row_num = matr.col_num, .col_num = matr.col_num, .data = res_data.data()};
@@ -55,34 +71,79 @@ void CheckMatrix(MatrixView<const double> matr, size_t thread_num, size_t batch_
   }
 }
 
+void CheckMatrixCosine(MatrixView<const double> matr, size_t thread_num, size_t batch_size)
+{
+  std::vector<double> res_data(matr.col_num * matr.col_num, 42.0);
+  MatrixView<double> res{.row_num = matr.col_num, .col_num = matr.col_num, .data = res_data.data()};
+  CalcDistanceCosine(matr, res, batch_size, thread_num);
+  for (size_t i = 0; i < matr.col_num; ++i)
+  {
+    for (size_t j = 0; j < matr.col_num; ++j)
+    {
+      EXPECT_NEAR(res[i][j], CosineDist(i, j, matr), 1e-15)
+        << "Error at (" << i << ", " << j << ") ";
+    }
+  }
+}
+
 using L1 = MatrixHolder;
 
 TEST_F(L1, square)
 {
-  CheckMatrix(r20c20, 1, 0);
+  CheckMatrixL1(r20c20, 1, 0);
 }
 
 TEST_F(L1, RectRgtC)
 {
-  CheckMatrix(r40c10, 1, 0);
+  CheckMatrixL1(r40c10, 1, 0);
 }
 
 TEST_F(L1, RectRltC)
 {
-  CheckMatrix(r10c40, 1, 0);
+  CheckMatrixL1(r10c40, 1, 0);
 }
 
 TEST_F(L1, OddBatch)
 {
-  CheckMatrix(r10c40, 1, 3);
-  CheckMatrix(r40c10, 1, 3);
-  CheckMatrix(r20c20, 1, 3);
+  CheckMatrixL1(r10c40, 1, 3);
+  CheckMatrixL1(r40c10, 1, 3);
+  CheckMatrixL1(r20c20, 1, 3);
 }
-
 
 TEST_F(L1, Multithread)
 {
-  CheckMatrix(r10c40, 0, 0);
-  CheckMatrix(r40c10, 0, 0);
-  CheckMatrix(r20c20, 0, 0);
+  CheckMatrixL1(r10c40, 0, 0);
+  CheckMatrixL1(r40c10, 0, 0);
+  CheckMatrixL1(r20c20, 0, 0);
+}
+
+using Cosine = MatrixHolder;
+
+TEST_F(Cosine, square)
+{
+  CheckMatrixCosine(r20c20, 1, 0);
+}
+
+TEST_F(Cosine, RectRgtC)
+{
+  CheckMatrixCosine(r40c10, 1, 0);
+}
+
+TEST_F(Cosine, RectRltC)
+{
+  CheckMatrixCosine(r10c40, 1, 0);
+}
+
+TEST_F(Cosine, OddBatch)
+{
+  CheckMatrixCosine(r10c40, 1, 3);
+  CheckMatrixCosine(r40c10, 1, 3);
+  CheckMatrixCosine(r20c20, 1, 3);
+}
+
+TEST_F(Cosine, Multithread)
+{
+  CheckMatrixCosine(r10c40, 0, 0);
+  CheckMatrixCosine(r40c10, 0, 0);
+  CheckMatrixCosine(r20c20, 0, 0);
 }

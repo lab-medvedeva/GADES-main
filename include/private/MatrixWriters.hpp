@@ -5,8 +5,8 @@
 class BasicMatrixWriter
 {
 public:
-  BasicMatrixWriter(MatrixView<double> view)
-    : matrix(view)
+  BasicMatrixWriter(MatrixView<double> view, double diag_elem = 0.0)
+     : matrix(view), diag_elem(diag_elem)
   {
   }
 
@@ -27,7 +27,7 @@ public:
   {
     for (size_t i = 0; i < batch_size; ++i)
     {
-      view(i, i) = 0.0;
+      view(i, i) = diag_elem;
     }
     for (size_t i = 1; i < batch_size; ++i)
     {
@@ -59,4 +59,5 @@ private:
   MatrixView<double> matrix;
   size_t offset;
   size_t batch_size;
+  double diag_elem;
 };

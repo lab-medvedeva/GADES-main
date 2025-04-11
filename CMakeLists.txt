@@ -9,6 +9,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/cmake)
 
 option(GADES_WITH_TSAN "Compile with thread sanitizer" OFF)
 option(GADES_WITH_ASAN "Compile with address sanitizer" OFF)
+option(GADES_WITH_MSAN "Build and compile tests for GADES" OFF)
 option(GADES_BUILD_TESTS "Build and compile tests for GADES" OFF)
 set(GADES_MARCH "native" CACHE STRING "Which option to use with -march when compiling")
 
@@ -33,18 +34,22 @@ add_library(GADES2 SHARED src/GADES.cpp)
 target_link_libraries(GADES2 PRIVATE gades2_templated)
 target_include_directories(GADES2 PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND GADES_BUILD_TESTS)
-  if (WITH_TSAN)
+if(GADES_BUILD_TESTS)
+  if (GADES_WITH_TSAN)
     add_compile_options(-fsanitize=thread)
     add_link_options(-fsanitize=thread)
   endif()
 
-  if (WITH_ASAN)
+  if (GADES_WITH_ASAN)
     add_compile_options(-fsanitize=address)
     add_link_options(-fsanitize=address)
   endif()
 
-  message("Running a Debug build")
+  if (GADES_WITH_MSAN)
+    add_compile_options(-fsanitize=memory -fPIE -pie)
+    add_link_options(-fsanitize=memory -fPIE -pie)
+  endif()
+
   FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
