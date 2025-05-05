@@ -57,7 +57,7 @@ if(GADES_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(googletest)
 
-  add_executable(gades_test tests/test.cpp)
+  add_executable(gades_test tests/test.cpp tests/sparse_test.cpp)
   target_link_libraries(
     gades_test
     GTest::gtest_main
