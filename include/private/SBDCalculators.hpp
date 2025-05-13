@@ -97,8 +97,8 @@ struct SparseBDL1Calc
   {
     const size_t lanes = hn::Lanes(d);
     {
-      const HWY_RESTRICT uint32_t* col_ptr = sliced_col_offsets_vector.data();
-      const HWY_RESTRICT uint32_t* col_end = col_ptr + batch_col_num * slice_num;
+      const uint32_t* HWY_RESTRICT col_ptr = sliced_col_offsets_vector.data();
+      const uint32_t* HWY_RESTRICT col_end = col_ptr + batch_col_num * slice_num;
       double* HWY_RESTRICT out = aligned_sliced_norms.data() + batch_aligned;
       std::memset(out, 0, batch_aligned * sizeof(double));
       const size_t diff = batch_aligned - batch_col_num;
@@ -448,8 +448,8 @@ struct SparseBDCosineCalc
   {
     const size_t lanes = hn::Lanes(d);
     {
-      const HWY_RESTRICT uint32_t* col_ptr = sliced_col_offsets_vector.data();
-      const HWY_RESTRICT uint32_t* col_end = col_ptr + batch_col_num * slice_num;
+      const uint32_t* HWY_RESTRICT col_ptr = sliced_col_offsets_vector.data();
+      const uint32_t* HWY_RESTRICT col_end = col_ptr + batch_col_num * slice_num;
       std::memset(aligned_norms.data(), 0, batch_col_num * sizeof(double));
       while (col_ptr != col_end)
       {
@@ -694,7 +694,8 @@ struct SparseBDCosineCalc
     return hn::ReduceSum(d, res);
   }
 
-  void normalizeRes(size_t len, double norm){
+  void normalizeRes(size_t len, double norm)
+  {
     const size_t lanes = hn::Lanes(d);
     double* HWY_RESTRICT ptr = aligned_tmp_res_vector.data();
     double* HWY_RESTRICT end = ptr + lane::RoundUpTo(len, lanes);
