@@ -396,6 +396,10 @@ private:
     {
       setDataPartial(batch, batch.col_num - rem, rem);
     }
+
+    double n = static_cast<double>(row_num);
+    coef = 12.0 / ((n - 1) * n * (n + 1));
+    diff = n * (n - 1) * (n - 1) / 4.0;
   }
 
   void setData(MatrixView<const double> batch, size_t pos)
@@ -577,21 +581,15 @@ private:
     {
       auto a_val = hn::Load(fd, a);
       auto b_val = hn::Load(fd, b);
-      auto diff = hn::Sub(a_val, b_val);
-      auto curr_d = hn::PromoteLowerTo(d, diff);
-      res_vec = hn::MulAdd(curr_d, curr_d, res_vec);
-      curr_d = hn::PromoteUpperTo(d, diff);
-      res_vec = hn::MulAdd(curr_d, curr_d, res_vec);
+      res_vec = hn::MulAdd(hn::PromoteUpperTo(d, a_val), hn::PromoteUpperTo(d, b_val), res_vec);
+      res_vec = hn::MulAdd(hn::PromoteLowerTo(d, a_val), hn::PromoteLowerTo(d, b_val), res_vec);
       a += lanes;
       b += lanes;
     }
     double res = hn::ReduceSum(d, res_vec);
-    double n = static_cast<double>(row_num);
-    double coef = 6.0 / (n * (n * n - 1));
-    res = 1.0 - coef * res;
+    res = coef * (res - diff);
     return res;
   }
-
 
   size_t row_num;
 
@@ -606,6 +604,9 @@ private:
 
   size_t outer_col_count;
   size_t batch_size;
+
+  double diff;
+  double coef;
 };
 
 } // namespace detail
