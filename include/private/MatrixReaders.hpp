@@ -69,3 +69,44 @@ public:
 private:
   SMView matrix;
 };
+
+class BasicSparseMatrixReaderNarrow
+{
+public:
+  using SMView = MatrixViewCSC<const double, const int32_t, const uint32_t>;
+  using SCView = ColumnViewCSC<const double, const int32_t>;
+  BasicSparseMatrixReaderNarrow(SMView view)
+    : matrix(view)
+  {
+  }
+
+  auto getBatch(size_t begin, size_t size)
+  {
+    SMView batch = {
+                    .vals = matrix.vals,
+                    .rows = matrix.rows,
+                    .col_offsets = matrix.col_offsets + begin,
+                    .col_num = size,
+                    .row_num = matrix.row_num};
+    return batch;
+  }
+
+  auto getReadFunc(size_t begin)
+  {
+    const uint32_t* col_ptr = matrix.col_offsets + begin;
+
+    auto func = [this, col_ptr]() mutable {
+      SCView col{
+        .vals = matrix.vals + col_ptr[0],
+        .rows = matrix.rows + col_ptr[0],
+        .len = col_ptr[1] - col_ptr[0],
+      };
+      ++col_ptr;
+      return col;
+    };
+    return func;
+  }
+
+private:
+  SMView matrix;
+};
