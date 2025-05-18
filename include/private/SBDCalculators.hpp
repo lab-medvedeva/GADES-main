@@ -97,8 +97,8 @@ struct SparseBDL1Calc
   {
     const size_t lanes = hn::Lanes(d);
     {
-      const HWY_RESTRICT uint32_t* col_ptr = sliced_col_offsets_vector.data();
-      const HWY_RESTRICT uint32_t* col_end = col_ptr + batch_col_num * slice_num;
+      const uint32_t* HWY_RESTRICT col_ptr = sliced_col_offsets_vector.data();
+      const uint32_t* HWY_RESTRICT col_end = col_ptr + batch_col_num * slice_num;
       double* HWY_RESTRICT out = aligned_sliced_norms.data() + batch_aligned;
       std::memset(aligned_sliced_norms.data(), 0, batch_aligned * sizeof(double));
       const size_t diff = batch_aligned - batch_col_num;
@@ -449,8 +449,8 @@ struct SparseBDCosineCalc
   {
     const size_t lanes = hn::Lanes(d);
     {
-      const HWY_RESTRICT uint32_t* col_ptr = sliced_col_offsets_vector.data();
-      const HWY_RESTRICT uint32_t* col_end = col_ptr + batch_col_num * slice_num;
+      const uint32_t* HWY_RESTRICT col_ptr = sliced_col_offsets_vector.data();
+      const uint32_t* HWY_RESTRICT col_end = col_ptr + batch_col_num * slice_num;
       std::memset(aligned_norms.data(), 0, batch_col_num * sizeof(double));
       while (col_ptr != col_end)
       {
@@ -922,8 +922,8 @@ struct SparseBDSpearmanCalc
   {
     {
       const size_t lanes = hn::Lanes(f32);
-      HWY_RESTRICT uint32_t* col_ptr = sliced_col_offsets_vector.data();
-      HWY_RESTRICT uint32_t* col_end = col_ptr + batch_col_num * slice_num;
+      uint32_t* HWY_RESTRICT col_ptr = sliced_col_offsets_vector.data();
+      uint32_t* HWY_RESTRICT col_end = col_ptr + batch_col_num * slice_num;
       float* HWY_RESTRICT val_ptr = aligned_sliced_vals_vector.data();
       double* HWY_RESTRICT out = aligned_sliced_zero_dist.data() + batch_aligned;
       setZeroAligned(f64, aligned_sliced_zero_dist.data(), out, lanes);
@@ -993,7 +993,8 @@ struct SparseBDSpearmanCalc
       std::max(sliced_col_offsets_vector.size(), batch_col_num * slice_num + 1));
     aligned_tmp_res_vector.resize(std::max(aligned_tmp_res_vector.size(), batch_aligned));
     tmp_ptrs_vector.resize(std::max(tmp_ptrs_vector.size(), batch_col_num));
-    aligned_sliced_zero_dist.resize(std::max(aligned_sliced_zero_dist.size(), batch_aligned * (slice_num + 1)));
+    aligned_sliced_zero_dist.resize(
+      std::max(aligned_sliced_zero_dist.size(), batch_aligned * (slice_num + 1)));
     aligned_zero_avgs.resize(std::max(aligned_zero_avgs.size(), batch_aligned));
     aligned_std.resize(std::max(aligned_std.size(), batch_aligned));
     tmp_ranks.resize(std::max(tmp_ranks.size(), nnz));
