@@ -14,7 +14,7 @@ namespace hn = hwy::HWY_NAMESPACE;
 
 struct SparseBDL1Calc
 {
-  static constexpr size_t SLICE_SIZE = 4096;
+  static constexpr size_t SLICE_SIZE = 32768;
   static constexpr HWY_FULL(double) d{};
   static constexpr HWY_FULL(int64_t) id{};
 
@@ -368,7 +368,7 @@ struct SparseBDL1Calc
 
 struct SparseBDCosineCalc
 {
-  static constexpr size_t SLICE_SIZE = 4096;
+  static constexpr size_t SLICE_SIZE = 32768;
   static constexpr HWY_FULL(double) d{};
   static constexpr HWY_FULL(int64_t) id{};
 
@@ -721,7 +721,7 @@ struct SparseBDSpearmanCalc
   using RankMatr = MatrixViewCSC<const float, const int32_t, const uint32_t>;
   using RankCol = ColumnViewCSC<const float, const int32_t>;
 
-  static constexpr size_t SLICE_SIZE = 8192;
+  static constexpr size_t SLICE_SIZE = 65536;
   static constexpr HWY_FULL(float) f32{};
   static constexpr HWY_FULL(double) f64{};
   static constexpr HWY_FULL(int32_t) i32{};
