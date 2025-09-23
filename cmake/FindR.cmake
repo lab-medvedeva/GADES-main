@@ -1,6 +1,7 @@
 if(${CMAKE_VERSION} VERSION_GREATER "3.11.0")
     cmake_policy(SET CMP0074 NEW)
 endif()
+
 find_path(
     R_INCLUDE_DIR NAMES R.h
     HINTS

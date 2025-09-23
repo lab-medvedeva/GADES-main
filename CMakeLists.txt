@@ -1,24 +1,104 @@
 cmake_minimum_required(VERSION 3.10)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 project(CompileProject)
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
-find_package(CUDA REQUIRED)
-find_package(R REQUIRED)
+option(GADES_WITH_TSAN "Compile with thread sanitizer" OFF)
+option(GADES_WITH_ASAN "Compile with address sanitizer" OFF)
+option(GADES_WITH_MSAN "Build and compile tests for GADES" OFF)
+option(GADES_BUILD_TESTS "Build and compile tests for GADES" OFF)
+set(GADES_MARCH "native" CACHE STRING "Which option to use with -march when compiling")
 
+set(HWY_ENABLE_TESTS OFF CACHE BOOL "")
+set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "")
 
-cuda_add_library(
-    mtrx
-    SHARED
-    main.cu
+include(FetchContent)
+FetchContent_Declare(
+  hwy
+  GIT_REPOSITORY https://github.com/google/highway.git
+  GIT_TAG 1.2.0
+  EXCLUDE_FROM_ALL
 )
-add_library (mtrx_cpu SHARED main.cpp)
+FetchContent_MakeAvailable(hwy)
 
-set_target_properties(mtrx PROPERTIES PREFIX "")
-set_target_properties(mtrx_cpu PROPERTIES PREFIX "")
-target_include_directories (mtrx_cpu PUBLIC ${R_INCLUDE_DIR})
-target_include_directories(mtrx PUBLIC ${R_INCLUDE_DIR})
-target_link_libraries(mtrx ${R_LIBRARIES})
-target_link_libraries(mtrx_cpu ${R_LIBRARIES})
+add_library(gades2_templated INTERFACE)
+target_include_directories(gades2_templated INTERFACE ${PROJECT_SOURCE_DIR}/include/private)
+target_link_libraries(gades2_templated INTERFACE hwy)
+target_compile_options(gades2_templated INTERFACE -march=${GADES_MARCH})
+
+add_library(GADES2 SHARED src/GADES.cpp)
+target_link_libraries(GADES2 PRIVATE gades2_templated)
+target_include_directories(GADES2 PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+if(GADES_BUILD_TESTS)
+  if (GADES_WITH_TSAN)
+    add_compile_options(-fsanitize=thread)
+    add_link_options(-fsanitize=thread)
+  endif()
+
+  if (GADES_WITH_ASAN)
+    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address)
+  endif()
+
+  if (GADES_WITH_MSAN)
+    add_compile_options(-fsanitize=memory -fPIE -pie)
+    add_link_options(-fsanitize=memory -fPIE -pie)
+  endif()
+
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.16.0
+  )
+  FetchContent_MakeAvailable(googletest)
+
+  add_executable(gades_test tests/test.cpp tests/sparse_test.cpp)
+  target_link_libraries(
+    gades_test
+    GTest::gtest_main
+    GADES2
+  )
+  include(GoogleTest)
+  gtest_discover_tests(gades_test)
+endif()
+
+# option(WITH_CUDA "Install With CUDA" OFF)
+# find_package(R REQUIRED)
+
+# if (WITH_CUDA)
+#     message("Building with CUDA required")
+#     find_package(CUDA REQUIRED)
+#     if(CUDA_FOUND)
+
+#         cuda_add_library(
+#             mtrx
+#             SHARED
+#             src/main.cu
+#         )
+#         set_target_properties(mtrx PROPERTIES PREFIX "")
+#         target_include_directories(mtrx PUBLIC ${R_INCLUDE_DIR})
+#         target_link_libraries(mtrx ${R_LIBRARIES})
+#         install(
+#             TARGETS mtrx
+#             LIBRARY DESTINATION libs
+#         )
+
+#     endif(CUDA_FOUND)
+
+# endif(WITH_CUDA)
+
+# add_library (mtrx_cpu SHARED src/main.cpp)
+
+# set_target_properties(mtrx_cpu PROPERTIES PREFIX "")
+# target_include_directories (mtrx_cpu PUBLIC ${R_INCLUDE_DIR})
+# target_link_libraries(mtrx_cpu ${R_LIBRARIES})
+
+# install(
+#    TARGETS mtrx_cpu
+#    LIBRARY DESTINATION libs
+# )
