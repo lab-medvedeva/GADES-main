@@ -1845,3 +1845,473 @@ extern "C" void matrix_Pearson_sparse_distance_different_blocks_cpu(
   free(a_values);
   free(b_values);
 }
+
+// ==================== Per-cell-pair sparse Kendall ====================
+//
+// Alternative sparse Kendall using CSC layout (CsparseMatrix from R).
+// 1 thread per (cell_a, cell_b) pair with double two-pointer merge.
+// No atomics, no sweep-line, signed-correct via n_signflip * n_inactive.
+// See plans/PER_CELL_PAIR.md for algorithm details.
+
+// Shared helper: compute discordant count for one cell pair via double merge.
+// Takes two separate CSC arrays (a = cell_a, b = cell_b). For same_block,
+// both point into the same underlying CSC.
+static long long kendall_per_cell_pair_merge(
+    const int* a_csc_i, const float* a_csc_x, int ia, int ea,
+    const int* b_csc_i, const float* b_csc_x, int ib, int eb,
+    int n_genes)
+{
+  long long discordant = 0;
+  int n_active = 0;
+  int n_signflip = 0;
+
+  int oia = ia, oib = ib;
+  while (oia < ea || oib < eb) {
+    float a_i, b_i;
+    int next_oia = oia, next_oib = oib;
+
+    if (oia < ea && (oib >= eb || a_csc_i[oia] < b_csc_i[oib])) {
+      a_i = a_csc_x[oia]; b_i = 0.0f;
+      next_oia = oia + 1;
+    } else if (oib < eb && (oia >= ea || b_csc_i[oib] < a_csc_i[oia])) {
+      a_i = 0.0f; b_i = b_csc_x[oib];
+      next_oib = oib + 1;
+    } else {
+      a_i = a_csc_x[oia]; b_i = b_csc_x[oib];
+      next_oia = oia + 1;
+      next_oib = oib + 1;
+    }
+
+    ++n_active;
+    if (a_i * b_i < 0.0f) ++n_signflip;
+
+    // Inner merge: gene_j > gene_i (all active genes after current)
+    int ja = next_oia, jb = next_oib;
+    while (ja < ea || jb < eb) {
+      float a_j, b_j;
+      if (ja < ea && (jb >= eb || a_csc_i[ja] < b_csc_i[jb])) {
+        a_j = a_csc_x[ja]; b_j = 0.0f; ++ja;
+      } else if (jb < eb && (ja >= ea || b_csc_i[jb] < a_csc_i[ja])) {
+        a_j = 0.0f; b_j = b_csc_x[jb]; ++jb;
+      } else {
+        a_j = a_csc_x[ja]; b_j = b_csc_x[jb]; ++ja; ++jb;
+      }
+      if ((a_i - a_j) * (b_i - b_j) < 0.0f) ++discordant;
+    }
+
+    oia = next_oia;
+    oib = next_oib;
+  }
+
+  int n_inactive = n_genes - n_active;
+  discordant += (long long)n_signflip * n_inactive;
+  return discordant;
+}
+
+extern "C" void matrix_Kendall_sparse_per_cell_pair_distance_same_block_cpu(
+    int* csc_i,
+    int* csc_p,
+    double* csc_x_double,
+    int* /*b_index*/,
+    int* /*b_positions*/,
+    double* /*b_values*/,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* /*num_columns_b*/,
+    int* num_elements_a,
+    int* /*num_elements_b*/)
+{
+  int n_genes = *num_rows;
+  int n_cells = *num_columns;
+  int nnz = *num_elements_a;
+
+  float* csc_x = new float[nnz];
+  for (int k = 0; k < nnz; ++k) csc_x[k] = static_cast<float>(csc_x_double[k]);
+
+  double norm = (double)n_genes * (n_genes - 1);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int cell_a = 0; cell_a < n_cells; ++cell_a) {
+    for (int cell_b = cell_a + 1; cell_b < n_cells; ++cell_b) {
+      long long disc = kendall_per_cell_pair_merge(
+          csc_i, csc_x, csc_p[cell_a], csc_p[cell_a + 1],
+          csc_i, csc_x, csc_p[cell_b], csc_p[cell_b + 1],
+          n_genes);
+      double d = (double)disc * 2.0 / norm;
+      result[cell_a * n_cells + cell_b] = d;
+      result[cell_b * n_cells + cell_a] = d;
+    }
+    result[cell_a * n_cells + cell_a] = 0.0;
+  }
+
+  delete[] csc_x;
+}
+
+extern "C" void matrix_Kendall_sparse_per_cell_pair_distance_different_blocks_cpu(
+    int* a_csc_i,
+    int* a_csc_p,
+    double* a_csc_x_double,
+    int* b_csc_i,
+    int* b_csc_p,
+    double* b_csc_x_double,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* num_columns_b,
+    int* num_elements_a,
+    int* num_elements_b)
+{
+  int n_genes = *num_rows;
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+
+  float* a_csc_x = new float[nnz_a];
+  float* b_csc_x = new float[nnz_b];
+  for (int k = 0; k < nnz_a; ++k) a_csc_x[k] = static_cast<float>(a_csc_x_double[k]);
+  for (int k = 0; k < nnz_b; ++k) b_csc_x[k] = static_cast<float>(b_csc_x_double[k]);
+
+  double norm = (double)n_genes * (n_genes - 1);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int cell_a = 0; cell_a < n_cells_a; ++cell_a) {
+    for (int cell_b = 0; cell_b < n_cells_b; ++cell_b) {
+      long long disc = kendall_per_cell_pair_merge(
+          a_csc_i, a_csc_x,
+          a_csc_p[cell_a], a_csc_p[cell_a + 1],
+          b_csc_i, b_csc_x,
+          b_csc_p[cell_b], b_csc_p[cell_b + 1],
+          n_genes);
+      double d = (double)disc * 2.0 / norm;
+      result[cell_b * n_cells_a + cell_a] = d;
+    }
+  }
+
+  delete[] a_csc_x;
+  delete[] b_csc_x;
+}
+
+// ==================== Per-cell-pair sparse: Euclidean / Manhattan / Cosine / Pearson ====================
+
+// ─── Euclidean ───
+
+static float euclidean_per_cell_pair_merge(
+    const int* a_i, const float* a_x, int ia, int ea,
+    const int* b_i, const float* b_x, int ib, int eb)
+{
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || a_i[ia] < b_i[ib])) {
+      float v = a_x[ia]; acc += v * v; ++ia;
+    } else if (ib < eb && (ia >= ea || b_i[ib] < a_i[ia])) {
+      float v = b_x[ib]; acc += v * v; ++ib;
+    } else {
+      float d = a_x[ia] - b_x[ib]; acc += d * d; ++ia; ++ib;
+    }
+  }
+  return sqrtf(acc);
+}
+
+extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_same_block_cpu(
+    int* csc_i, int* csc_p, double* csc_x_double,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements_a, int* /*num_elements_b*/)
+{
+  int n_cells = *num_columns;
+  int nnz = *num_elements_a;
+  float* csc_x = new float[nnz];
+  for (int k = 0; k < nnz; ++k) csc_x[k] = static_cast<float>(csc_x_double[k]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells; ++ca) {
+    for (int cb = ca + 1; cb < n_cells; ++cb) {
+      float d = euclidean_per_cell_pair_merge(
+          csc_i, csc_x, csc_p[ca], csc_p[ca + 1],
+          csc_i, csc_x, csc_p[cb], csc_p[cb + 1]);
+      result[ca * n_cells + cb] = d;
+      result[cb * n_cells + ca] = d;
+    }
+    result[ca * n_cells + ca] = 0.0;
+  }
+  delete[] csc_x;
+}
+
+extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_different_blocks_cpu(
+    int* a_csc_i, int* a_csc_p, double* a_xd,
+    int* b_csc_i, int* b_csc_p, double* b_xd,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+  float* a_x = new float[nnz_a];
+  float* b_x = new float[nnz_b];
+  for (int k = 0; k < nnz_a; ++k) a_x[k] = static_cast<float>(a_xd[k]);
+  for (int k = 0; k < nnz_b; ++k) b_x[k] = static_cast<float>(b_xd[k]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells_a; ++ca) {
+    for (int cb = 0; cb < n_cells_b; ++cb) {
+      float d = euclidean_per_cell_pair_merge(
+          a_csc_i, a_x, a_csc_p[ca], a_csc_p[ca + 1],
+          b_csc_i, b_x, b_csc_p[cb], b_csc_p[cb + 1]);
+      result[cb * n_cells_a + ca] = d;
+    }
+  }
+  delete[] a_x;
+  delete[] b_x;
+}
+
+// ─── Manhattan ───
+
+static float manhattan_per_cell_pair_merge(
+    const int* a_i, const float* a_x, int ia, int ea,
+    const int* b_i, const float* b_x, int ib, int eb)
+{
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || a_i[ia] < b_i[ib])) {
+      acc += fabsf(a_x[ia]); ++ia;
+    } else if (ib < eb && (ia >= ea || b_i[ib] < a_i[ia])) {
+      acc += fabsf(b_x[ib]); ++ib;
+    } else {
+      acc += fabsf(a_x[ia] - b_x[ib]); ++ia; ++ib;
+    }
+  }
+  return acc;
+}
+
+extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_same_block_cpu(
+    int* csc_i, int* csc_p, double* csc_x_double,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements_a, int* /*num_elements_b*/)
+{
+  int n_cells = *num_columns;
+  int nnz = *num_elements_a;
+  float* csc_x = new float[nnz];
+  for (int k = 0; k < nnz; ++k) csc_x[k] = static_cast<float>(csc_x_double[k]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells; ++ca) {
+    for (int cb = ca + 1; cb < n_cells; ++cb) {
+      float d = manhattan_per_cell_pair_merge(
+          csc_i, csc_x, csc_p[ca], csc_p[ca + 1],
+          csc_i, csc_x, csc_p[cb], csc_p[cb + 1]);
+      result[ca * n_cells + cb] = d;
+      result[cb * n_cells + ca] = d;
+    }
+    result[ca * n_cells + ca] = 0.0;
+  }
+  delete[] csc_x;
+}
+
+extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_different_blocks_cpu(
+    int* a_csc_i, int* a_csc_p, double* a_xd,
+    int* b_csc_i, int* b_csc_p, double* b_xd,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+  float* a_x = new float[nnz_a];
+  float* b_x = new float[nnz_b];
+  for (int k = 0; k < nnz_a; ++k) a_x[k] = static_cast<float>(a_xd[k]);
+  for (int k = 0; k < nnz_b; ++k) b_x[k] = static_cast<float>(b_xd[k]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells_a; ++ca) {
+    for (int cb = 0; cb < n_cells_b; ++cb) {
+      float d = manhattan_per_cell_pair_merge(
+          a_csc_i, a_x, a_csc_p[ca], a_csc_p[ca + 1],
+          b_csc_i, b_x, b_csc_p[cb], b_csc_p[cb + 1]);
+      result[cb * n_cells_a + ca] = d;
+    }
+  }
+  delete[] a_x;
+  delete[] b_x;
+}
+
+// ─── Cosine ───
+
+static float cosine_per_cell_pair_merge(
+    const int* a_i, const float* a_x, int ia, int ea, float norm_a,
+    const int* b_i, const float* b_x, int ib, int eb, float norm_b)
+{
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    if (a_i[ia] < b_i[ib]) ++ia;
+    else if (b_i[ib] < a_i[ia]) ++ib;
+    else { dot += a_x[ia] * b_x[ib]; ++ia; ++ib; }
+  }
+  return 1.0f - dot / (norm_a * norm_b);
+}
+
+static float compute_norm(const float* x, int start, int end) {
+  float s = 0;
+  for (int k = start; k < end; ++k) s += x[k] * x[k];
+  return sqrtf(s);
+}
+
+extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_same_block_cpu(
+    int* csc_i, int* csc_p, double* csc_x_double,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements_a, int* /*num_elements_b*/)
+{
+  int n_cells = *num_columns;
+  int nnz = *num_elements_a;
+  float* csc_x = new float[nnz];
+  for (int k = 0; k < nnz; ++k) csc_x[k] = static_cast<float>(csc_x_double[k]);
+
+  float* norms = new float[n_cells];
+  for (int c = 0; c < n_cells; ++c) norms[c] = compute_norm(csc_x, csc_p[c], csc_p[c + 1]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells; ++ca) {
+    for (int cb = ca + 1; cb < n_cells; ++cb) {
+      float d = cosine_per_cell_pair_merge(
+          csc_i, csc_x, csc_p[ca], csc_p[ca + 1], norms[ca],
+          csc_i, csc_x, csc_p[cb], csc_p[cb + 1], norms[cb]);
+      result[ca * n_cells + cb] = d;
+      result[cb * n_cells + ca] = d;
+    }
+    result[ca * n_cells + ca] = 0.0;
+  }
+  delete[] csc_x;
+  delete[] norms;
+}
+
+extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_different_blocks_cpu(
+    int* a_csc_i, int* a_csc_p, double* a_xd,
+    int* b_csc_i, int* b_csc_p, double* b_xd,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+  float* a_x = new float[nnz_a];
+  float* b_x = new float[nnz_b];
+  for (int k = 0; k < nnz_a; ++k) a_x[k] = static_cast<float>(a_xd[k]);
+  for (int k = 0; k < nnz_b; ++k) b_x[k] = static_cast<float>(b_xd[k]);
+
+  float* a_norms = new float[n_cells_a];
+  float* b_norms = new float[n_cells_b];
+  for (int c = 0; c < n_cells_a; ++c) a_norms[c] = compute_norm(a_x, a_csc_p[c], a_csc_p[c + 1]);
+  for (int c = 0; c < n_cells_b; ++c) b_norms[c] = compute_norm(b_x, b_csc_p[c], b_csc_p[c + 1]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells_a; ++ca) {
+    for (int cb = 0; cb < n_cells_b; ++cb) {
+      float d = cosine_per_cell_pair_merge(
+          a_csc_i, a_x, a_csc_p[ca], a_csc_p[ca + 1], a_norms[ca],
+          b_csc_i, b_x, b_csc_p[cb], b_csc_p[cb + 1], b_norms[cb]);
+      result[cb * n_cells_a + ca] = d;
+    }
+  }
+  delete[] a_x;  delete[] b_x;
+  delete[] a_norms; delete[] b_norms;
+}
+
+// ─── Pearson ───
+
+static float pearson_per_cell_pair_merge(
+    const int* a_i, const float* a_x, int ia, int ea, float sum_a, float sumsq_a,
+    const int* b_i, const float* b_x, int ib, int eb, float sum_b, float sumsq_b,
+    int n_genes)
+{
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    if (a_i[ia] < b_i[ib]) ++ia;
+    else if (b_i[ib] < a_i[ia]) ++ib;
+    else { dot += a_x[ia] * b_x[ib]; ++ia; ++ib; }
+  }
+  float n = (float)n_genes;
+  float cov = dot - sum_a * sum_b / n;
+  float va  = sumsq_a - sum_a * sum_a / n;
+  float vb  = sumsq_b - sum_b * sum_b / n;
+  return 1.0f - cov / sqrtf(va * vb);
+}
+
+static void compute_sum_sumsq(const float* x, int start, int end, float& s, float& sq) {
+  s = 0; sq = 0;
+  for (int k = start; k < end; ++k) { s += x[k]; sq += x[k] * x[k]; }
+}
+
+extern "C" void matrix_Pearson_sparse_per_cell_pair_distance_same_block_cpu(
+    int* csc_i, int* csc_p, double* csc_x_double,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements_a, int* /*num_elements_b*/)
+{
+  int n_genes = *num_rows;
+  int n_cells = *num_columns;
+  int nnz = *num_elements_a;
+  float* csc_x = new float[nnz];
+  for (int k = 0; k < nnz; ++k) csc_x[k] = static_cast<float>(csc_x_double[k]);
+
+  float* sums = new float[n_cells];
+  float* sumsqs = new float[n_cells];
+  for (int c = 0; c < n_cells; ++c) compute_sum_sumsq(csc_x, csc_p[c], csc_p[c + 1], sums[c], sumsqs[c]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells; ++ca) {
+    for (int cb = ca + 1; cb < n_cells; ++cb) {
+      float d = pearson_per_cell_pair_merge(
+          csc_i, csc_x, csc_p[ca], csc_p[ca + 1], sums[ca], sumsqs[ca],
+          csc_i, csc_x, csc_p[cb], csc_p[cb + 1], sums[cb], sumsqs[cb],
+          n_genes);
+      result[ca * n_cells + cb] = d;
+      result[cb * n_cells + ca] = d;
+    }
+    result[ca * n_cells + ca] = 0.0;
+  }
+  delete[] csc_x;
+  delete[] sums;
+  delete[] sumsqs;
+}
+
+extern "C" void matrix_Pearson_sparse_per_cell_pair_distance_different_blocks_cpu(
+    int* a_csc_i, int* a_csc_p, double* a_xd,
+    int* b_csc_i, int* b_csc_p, double* b_xd,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_genes = *num_rows;
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+  float* a_x = new float[nnz_a];
+  float* b_x = new float[nnz_b];
+  for (int k = 0; k < nnz_a; ++k) a_x[k] = static_cast<float>(a_xd[k]);
+  for (int k = 0; k < nnz_b; ++k) b_x[k] = static_cast<float>(b_xd[k]);
+
+  float* a_s = new float[n_cells_a]; float* a_q = new float[n_cells_a];
+  float* b_s = new float[n_cells_b]; float* b_q = new float[n_cells_b];
+  for (int c = 0; c < n_cells_a; ++c) compute_sum_sumsq(a_x, a_csc_p[c], a_csc_p[c + 1], a_s[c], a_q[c]);
+  for (int c = 0; c < n_cells_b; ++c) compute_sum_sumsq(b_x, b_csc_p[c], b_csc_p[c + 1], b_s[c], b_q[c]);
+
+  #pragma omp parallel for schedule(dynamic)
+  for (int ca = 0; ca < n_cells_a; ++ca) {
+    for (int cb = 0; cb < n_cells_b; ++cb) {
+      float d = pearson_per_cell_pair_merge(
+          a_csc_i, a_x, a_csc_p[ca], a_csc_p[ca + 1], a_s[ca], a_q[ca],
+          b_csc_i, b_x, b_csc_p[cb], b_csc_p[cb + 1], b_s[cb], b_q[cb],
+          n_genes);
+      result[cb * n_cells_a + ca] = d;
+    }
+  }
+  delete[] a_x;  delete[] b_x;
+  delete[] a_s;  delete[] a_q;
+  delete[] b_s;  delete[] b_q;
+}

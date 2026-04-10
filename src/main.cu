@@ -2190,6 +2190,994 @@ extern "C" void matrix_Kendall_sparse_distance_different_blocks(
     delete[] h_concordant;
 }
 
+// ==================== Per-cell-pair sparse Kendall ====================
+//
+// Alternative sparse Kendall using CSC layout (CsparseMatrix from R).
+// 1 thread per (cell_a, cell_b) pair with double two-pointer merge.
+// No atomics, no sweep-line, signed-correct via n_signflip * n_inactive.
+// See plans/PER_CELL_PAIR.md for algorithm details.
+
+__global__ void RkendallSparseCorr_gpu_per_cell_pair_same_block(
+    const int* __restrict__ csc_p,
+    const int* __restrict__ csc_i,
+    const float* __restrict__ csc_x,
+    int n_genes,
+    int n_cells,
+    int* __restrict__ discordant_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= cell_b || cell_b >= n_cells) return;
+
+  int ia = csc_p[cell_a], ea = csc_p[cell_a + 1];
+  int ib = csc_p[cell_b], eb = csc_p[cell_b + 1];
+
+  int discordant = 0;
+  int n_active   = 0;
+  int n_signflip = 0;
+
+  while (ia < ea || ib < eb) {
+    float a_i, b_i;
+    int next_ia = ia, next_ib = ib;
+
+    if (ia < ea && (ib >= eb || csc_i[ia] < csc_i[ib])) {
+      a_i = csc_x[ia]; b_i = 0.0f;
+      next_ia = ia + 1;
+    } else if (ib < eb && (ia >= ea || csc_i[ib] < csc_i[ia])) {
+      a_i = 0.0f; b_i = csc_x[ib];
+      next_ib = ib + 1;
+    } else {
+      a_i = csc_x[ia]; b_i = csc_x[ib];
+      next_ia = ia + 1;
+      next_ib = ib + 1;
+    }
+
+    ++n_active;
+    if (a_i * b_i < 0.0f) ++n_signflip;
+
+    int ja = next_ia, jb = next_ib;
+    while (ja < ea || jb < eb) {
+      float a_j, b_j;
+      if (ja < ea && (jb >= eb || csc_i[ja] < csc_i[jb])) {
+        a_j = csc_x[ja]; b_j = 0.0f; ++ja;
+      } else if (jb < eb && (ja >= ea || csc_i[jb] < csc_i[ja])) {
+        a_j = 0.0f; b_j = csc_x[jb]; ++jb;
+      } else {
+        a_j = csc_x[ja]; b_j = csc_x[jb]; ++ja; ++jb;
+      }
+      if ((a_i - a_j) * (b_i - b_j) < 0.0f) ++discordant;
+    }
+
+    ia = next_ia;
+    ib = next_ib;
+  }
+
+  int n_inactive = n_genes - n_active;
+  discordant += n_signflip * n_inactive;
+
+  discordant_out[cell_a * n_cells + cell_b] = discordant;
+}
+
+__global__ void RkendallSparseCorr_gpu_per_cell_pair_different_blocks(
+    const int* __restrict__ a_csc_p,
+    const int* __restrict__ a_csc_i,
+    const float* __restrict__ a_csc_x,
+    const int* __restrict__ b_csc_p,
+    const int* __restrict__ b_csc_i,
+    const float* __restrict__ b_csc_x,
+    int n_genes,
+    int n_cells_a,
+    int n_cells_b,
+    int* __restrict__ discordant_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= n_cells_a || cell_b >= n_cells_b) return;
+
+  int ia = a_csc_p[cell_a], ea = a_csc_p[cell_a + 1];
+  int ib = b_csc_p[cell_b], eb = b_csc_p[cell_b + 1];
+
+  int discordant = 0;
+  int n_active   = 0;
+  int n_signflip = 0;
+
+  while (ia < ea || ib < eb) {
+    float a_i, b_i;
+    int next_ia = ia, next_ib = ib;
+
+    if (ia < ea && (ib >= eb || a_csc_i[ia] < b_csc_i[ib])) {
+      a_i = a_csc_x[ia]; b_i = 0.0f;
+      next_ia = ia + 1;
+    } else if (ib < eb && (ia >= ea || b_csc_i[ib] < a_csc_i[ia])) {
+      a_i = 0.0f; b_i = b_csc_x[ib];
+      next_ib = ib + 1;
+    } else {
+      a_i = a_csc_x[ia]; b_i = b_csc_x[ib];
+      next_ia = ia + 1;
+      next_ib = ib + 1;
+    }
+
+    ++n_active;
+    if (a_i * b_i < 0.0f) ++n_signflip;
+
+    int ja = next_ia, jb = next_ib;
+    while (ja < ea || jb < eb) {
+      float a_j, b_j;
+      if (ja < ea && (jb >= eb || a_csc_i[ja] < b_csc_i[jb])) {
+        a_j = a_csc_x[ja]; b_j = 0.0f; ++ja;
+      } else if (jb < eb && (ja >= ea || b_csc_i[jb] < a_csc_i[ja])) {
+        a_j = 0.0f; b_j = b_csc_x[jb]; ++jb;
+      } else {
+        a_j = a_csc_x[ja]; b_j = b_csc_x[jb]; ++ja; ++jb;
+      }
+      if ((a_i - a_j) * (b_i - b_j) < 0.0f) ++discordant;
+    }
+
+    ia = next_ia;
+    ib = next_ib;
+  }
+
+  int n_inactive = n_genes - n_active;
+  discordant += n_signflip * n_inactive;
+
+  discordant_out[cell_b * n_cells_a + cell_a] = discordant;
+}
+
+__global__ void FinalizeKendallPerCellPair(
+    int n_cells, int n_genes,
+    const int* __restrict__ discordant_in,
+    double* __restrict__ result_out)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row >= n_cells || col >= n_cells) return;
+
+  int idx = row * n_cells + col;
+  if (row < col) {
+    double d = (double)discordant_in[idx];
+    result_out[idx] = d * 2.0 / ((double)n_genes * (n_genes - 1));
+  } else if (row > col) {
+    int sym = col * n_cells + row;
+    double d = (double)discordant_in[sym];
+    result_out[idx] = d * 2.0 / ((double)n_genes * (n_genes - 1));
+  } else {
+    result_out[idx] = 0.0;
+  }
+}
+
+extern "C" void matrix_Kendall_sparse_per_cell_pair_distance_same_block(
+    int* csc_i_in,
+    int* csc_p_in,
+    double* csc_x_in,
+    int* /*b_index*/,
+    int* /*b_positions*/,
+    double* /*b_values*/,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* /*num_columns_b*/,
+    int* num_elements,
+    int* /*num_elements_b*/)
+{
+  int n_genes = *num_rows;
+  int n_cells = *num_columns;
+  int nnz     = *num_elements;
+
+  std::vector<float> csc_x_f(nnz);
+  for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
+
+  int*    d_csc_i;
+  int*    d_csc_p;
+  float*  d_csc_x;
+  int*    d_discordant;
+  double* d_result;
+
+  cudaMalloc(&d_csc_i,      nnz * sizeof(int));
+  cudaMalloc(&d_csc_p,      (n_cells + 1) * sizeof(int));
+  cudaMalloc(&d_csc_x,      nnz * sizeof(float));
+  cudaMalloc(&d_discordant, n_cells * n_cells * sizeof(int));
+  cudaMalloc(&d_result,     n_cells * n_cells * sizeof(double));
+
+  cudaMemcpy(d_csc_i, csc_i_in,        nnz * sizeof(int),            cudaMemcpyHostToDevice);
+  cudaMemcpy(d_csc_p, csc_p_in,        (n_cells + 1) * sizeof(int),  cudaMemcpyHostToDevice);
+  cudaMemcpy(d_csc_x, csc_x_f.data(),  nnz * sizeof(float),          cudaMemcpyHostToDevice);
+  cudaMemset(d_discordant, 0, n_cells * n_cells * sizeof(int));
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells + 15) / 16, (n_cells + 15) / 16);
+
+  RkendallSparseCorr_gpu_per_cell_pair_same_block<<<blocks, threads>>>(
+      d_csc_p, d_csc_i, d_csc_x, n_genes, n_cells, d_discordant);
+  gpuErrchk(cudaPeekAtLastError());
+
+  FinalizeKendallPerCellPair<<<blocks, threads>>>(
+      n_cells, n_genes, d_discordant, d_result);
+  gpuErrchk(cudaPeekAtLastError());
+
+  cudaMemcpy(result, d_result, n_cells * n_cells * sizeof(double),
+             cudaMemcpyDeviceToHost);
+
+  cudaFree(d_csc_i);
+  cudaFree(d_csc_p);
+  cudaFree(d_csc_x);
+  cudaFree(d_discordant);
+  cudaFree(d_result);
+}
+
+extern "C" void matrix_Kendall_sparse_per_cell_pair_distance_different_blocks(
+    int* a_csc_i_in,
+    int* a_csc_p_in,
+    double* a_csc_x_in,
+    int* b_csc_i_in,
+    int* b_csc_p_in,
+    double* b_csc_x_in,
+    double* result,
+    int* num_rows,
+    int* num_columns,
+    int* num_columns_b,
+    int* num_elements_a,
+    int* num_elements_b)
+{
+  int n_genes   = *num_rows;
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a     = *num_elements_a;
+  int nnz_b     = *num_elements_b;
+
+  std::vector<float> a_csc_x_f(nnz_a);
+  std::vector<float> b_csc_x_f(nnz_b);
+  for (int k = 0; k < nnz_a; ++k) a_csc_x_f[k] = (float)a_csc_x_in[k];
+  for (int k = 0; k < nnz_b; ++k) b_csc_x_f[k] = (float)b_csc_x_in[k];
+
+  int*    d_a_csc_i;
+  int*    d_a_csc_p;
+  float*  d_a_csc_x;
+  int*    d_b_csc_i;
+  int*    d_b_csc_p;
+  float*  d_b_csc_x;
+  int*    d_discordant;
+
+  cudaMalloc(&d_a_csc_i, nnz_a * sizeof(int));
+  cudaMalloc(&d_a_csc_p, (n_cells_a + 1) * sizeof(int));
+  cudaMalloc(&d_a_csc_x, nnz_a * sizeof(float));
+  cudaMalloc(&d_b_csc_i, nnz_b * sizeof(int));
+  cudaMalloc(&d_b_csc_p, (n_cells_b + 1) * sizeof(int));
+  cudaMalloc(&d_b_csc_x, nnz_b * sizeof(float));
+  cudaMalloc(&d_discordant, n_cells_a * n_cells_b * sizeof(int));
+
+  cudaMemcpy(d_a_csc_i, a_csc_i_in,        nnz_a * sizeof(int),            cudaMemcpyHostToDevice);
+  cudaMemcpy(d_a_csc_p, a_csc_p_in,        (n_cells_a + 1) * sizeof(int),  cudaMemcpyHostToDevice);
+  cudaMemcpy(d_a_csc_x, a_csc_x_f.data(),  nnz_a * sizeof(float),          cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b_csc_i, b_csc_i_in,        nnz_b * sizeof(int),            cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b_csc_p, b_csc_p_in,        (n_cells_b + 1) * sizeof(int),  cudaMemcpyHostToDevice);
+  cudaMemcpy(d_b_csc_x, b_csc_x_f.data(),  nnz_b * sizeof(float),          cudaMemcpyHostToDevice);
+  cudaMemset(d_discordant, 0, n_cells_a * n_cells_b * sizeof(int));
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells_b + 15) / 16, (n_cells_a + 15) / 16);
+
+  RkendallSparseCorr_gpu_per_cell_pair_different_blocks<<<blocks, threads>>>(
+      d_a_csc_p, d_a_csc_i, d_a_csc_x,
+      d_b_csc_p, d_b_csc_i, d_b_csc_x,
+      n_genes, n_cells_a, n_cells_b, d_discordant);
+  gpuErrchk(cudaPeekAtLastError());
+
+  // Normalize on host (no symmetry needed for different_blocks)
+  std::vector<int> h_disc(n_cells_a * n_cells_b);
+  cudaMemcpy(h_disc.data(), d_discordant, n_cells_a * n_cells_b * sizeof(int),
+             cudaMemcpyDeviceToHost);
+  double norm = (double)n_genes * (n_genes - 1);
+  for (int i = 0; i < n_cells_a * n_cells_b; ++i) {
+    result[i] = (double)h_disc[i] * 2.0 / norm;
+  }
+
+  cudaFree(d_a_csc_i);
+  cudaFree(d_a_csc_p);
+  cudaFree(d_a_csc_x);
+  cudaFree(d_b_csc_i);
+  cudaFree(d_b_csc_p);
+  cudaFree(d_b_csc_x);
+  cudaFree(d_discordant);
+}
+
+// ==================== Per-cell-pair sparse: Euclidean / Manhattan / Cosine / Pearson ====================
+//
+// 1 thread per (cell_a, cell_b), single two-pointer merge over CSC columns.
+// O(nnz_a + nnz_b) per thread. No atomics.
+// See plans/PER_CELL_PAIR_OTHER_METRICS.md
+
+// ─── Preprocessing kernels ───
+
+__global__ void compute_cell_norms(
+    const int* __restrict__ csc_p,
+    const float* __restrict__ csc_x,
+    int n_cells,
+    float* __restrict__ norm_out)
+{
+  int c = blockIdx.x * blockDim.x + threadIdx.x;
+  if (c >= n_cells) return;
+  float s = 0;
+  for (int k = csc_p[c]; k < csc_p[c + 1]; ++k) s += csc_x[k] * csc_x[k];
+  norm_out[c] = sqrtf(s);
+}
+
+__global__ void compute_cell_sum_sumsq(
+    const int* __restrict__ csc_p,
+    const float* __restrict__ csc_x,
+    int n_cells,
+    float* __restrict__ sum_out,
+    float* __restrict__ sumsq_out)
+{
+  int c = blockIdx.x * blockDim.x + threadIdx.x;
+  if (c >= n_cells) return;
+  float s = 0, s2 = 0;
+  for (int k = csc_p[c]; k < csc_p[c + 1]; ++k) {
+    float v = csc_x[k];
+    s  += v;
+    s2 += v * v;
+  }
+  sum_out[c]   = s;
+  sumsq_out[c] = s2;
+}
+
+// ─── Finalize: float upper-triangle → double symmetric matrix ───
+
+__global__ void FinalizePerCellPairFloat(
+    int n_cells,
+    const float* __restrict__ in,
+    double* __restrict__ out)
+{
+  int row = blockIdx.y * blockDim.y + threadIdx.y;
+  int col = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row >= n_cells || col >= n_cells) return;
+  int idx = row * n_cells + col;
+  if (row < col) {
+    out[idx] = (double)in[idx];
+  } else if (row > col) {
+    out[idx] = (double)in[col * n_cells + row];
+  } else {
+    out[idx] = 0.0;
+  }
+}
+
+// ─── Euclidean ───
+
+__global__ void ReuclideanSparse_per_cell_pair_same_block(
+    const int* __restrict__ csc_p,
+    const int* __restrict__ csc_i,
+    const float* __restrict__ csc_x,
+    int n_cells,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= cell_b || cell_b >= n_cells) return;
+
+  int ia = csc_p[cell_a], ea = csc_p[cell_a + 1];
+  int ib = csc_p[cell_b], eb = csc_p[cell_b + 1];
+
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || csc_i[ia] < csc_i[ib])) {
+      float v = csc_x[ia]; acc += v * v; ++ia;
+    } else if (ib < eb && (ia >= ea || csc_i[ib] < csc_i[ia])) {
+      float v = csc_x[ib]; acc += v * v; ++ib;
+    } else {
+      float d = csc_x[ia] - csc_x[ib]; acc += d * d; ++ia; ++ib;
+    }
+  }
+  result_out[cell_a * n_cells + cell_b] = sqrtf(acc);
+}
+
+__global__ void ReuclideanSparse_per_cell_pair_different_blocks(
+    const int* __restrict__ a_csc_p,
+    const int* __restrict__ a_csc_i,
+    const float* __restrict__ a_csc_x,
+    const int* __restrict__ b_csc_p,
+    const int* __restrict__ b_csc_i,
+    const float* __restrict__ b_csc_x,
+    int n_cells_a, int n_cells_b,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= n_cells_a || cell_b >= n_cells_b) return;
+
+  int ia = a_csc_p[cell_a], ea = a_csc_p[cell_a + 1];
+  int ib = b_csc_p[cell_b], eb = b_csc_p[cell_b + 1];
+
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || a_csc_i[ia] < b_csc_i[ib])) {
+      float v = a_csc_x[ia]; acc += v * v; ++ia;
+    } else if (ib < eb && (ia >= ea || b_csc_i[ib] < a_csc_i[ia])) {
+      float v = b_csc_x[ib]; acc += v * v; ++ib;
+    } else {
+      float d = a_csc_x[ia] - b_csc_x[ib]; acc += d * d; ++ia; ++ib;
+    }
+  }
+  result_out[cell_b * n_cells_a + cell_a] = sqrtf(acc);
+}
+
+// ─── Manhattan ───
+
+__global__ void RmanhattanSparse_per_cell_pair_same_block(
+    const int* __restrict__ csc_p,
+    const int* __restrict__ csc_i,
+    const float* __restrict__ csc_x,
+    int n_cells,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= cell_b || cell_b >= n_cells) return;
+
+  int ia = csc_p[cell_a], ea = csc_p[cell_a + 1];
+  int ib = csc_p[cell_b], eb = csc_p[cell_b + 1];
+
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || csc_i[ia] < csc_i[ib])) {
+      acc += fabsf(csc_x[ia]); ++ia;
+    } else if (ib < eb && (ia >= ea || csc_i[ib] < csc_i[ia])) {
+      acc += fabsf(csc_x[ib]); ++ib;
+    } else {
+      acc += fabsf(csc_x[ia] - csc_x[ib]); ++ia; ++ib;
+    }
+  }
+  result_out[cell_a * n_cells + cell_b] = acc;
+}
+
+__global__ void RmanhattanSparse_per_cell_pair_different_blocks(
+    const int* __restrict__ a_csc_p,
+    const int* __restrict__ a_csc_i,
+    const float* __restrict__ a_csc_x,
+    const int* __restrict__ b_csc_p,
+    const int* __restrict__ b_csc_i,
+    const float* __restrict__ b_csc_x,
+    int n_cells_a, int n_cells_b,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= n_cells_a || cell_b >= n_cells_b) return;
+
+  int ia = a_csc_p[cell_a], ea = a_csc_p[cell_a + 1];
+  int ib = b_csc_p[cell_b], eb = b_csc_p[cell_b + 1];
+
+  float acc = 0;
+  while (ia < ea || ib < eb) {
+    if (ia < ea && (ib >= eb || a_csc_i[ia] < b_csc_i[ib])) {
+      acc += fabsf(a_csc_x[ia]); ++ia;
+    } else if (ib < eb && (ia >= ea || b_csc_i[ib] < a_csc_i[ia])) {
+      acc += fabsf(b_csc_x[ib]); ++ib;
+    } else {
+      acc += fabsf(a_csc_x[ia] - b_csc_x[ib]); ++ia; ++ib;
+    }
+  }
+  result_out[cell_b * n_cells_a + cell_a] = acc;
+}
+
+// ─── Cosine ───
+
+__global__ void RcosineSparse_per_cell_pair_same_block(
+    const int* __restrict__ csc_p,
+    const int* __restrict__ csc_i,
+    const float* __restrict__ csc_x,
+    const float* __restrict__ norms,
+    int n_cells,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= cell_b || cell_b >= n_cells) return;
+
+  int ia = csc_p[cell_a], ea = csc_p[cell_a + 1];
+  int ib = csc_p[cell_b], eb = csc_p[cell_b + 1];
+
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    int ga = csc_i[ia], gb = csc_i[ib];
+    if      (ga < gb) ++ia;
+    else if (gb < ga) ++ib;
+    else { dot += csc_x[ia] * csc_x[ib]; ++ia; ++ib; }
+  }
+  result_out[cell_a * n_cells + cell_b] = 1.0f - dot / (norms[cell_a] * norms[cell_b]);
+}
+
+__global__ void RcosineSparse_per_cell_pair_different_blocks(
+    const int* __restrict__ a_csc_p,
+    const int* __restrict__ a_csc_i,
+    const float* __restrict__ a_csc_x,
+    const float* __restrict__ a_norms,
+    const int* __restrict__ b_csc_p,
+    const int* __restrict__ b_csc_i,
+    const float* __restrict__ b_csc_x,
+    const float* __restrict__ b_norms,
+    int n_cells_a, int n_cells_b,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= n_cells_a || cell_b >= n_cells_b) return;
+
+  int ia = a_csc_p[cell_a], ea = a_csc_p[cell_a + 1];
+  int ib = b_csc_p[cell_b], eb = b_csc_p[cell_b + 1];
+
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    int ga = a_csc_i[ia], gb = b_csc_i[ib];
+    if      (ga < gb) ++ia;
+    else if (gb < ga) ++ib;
+    else { dot += a_csc_x[ia] * b_csc_x[ib]; ++ia; ++ib; }
+  }
+  result_out[cell_b * n_cells_a + cell_a] = 1.0f - dot / (a_norms[cell_a] * b_norms[cell_b]);
+}
+
+// ─── Pearson ───
+
+__global__ void RpearsonSparse_per_cell_pair_same_block(
+    const int* __restrict__ csc_p,
+    const int* __restrict__ csc_i,
+    const float* __restrict__ csc_x,
+    const float* __restrict__ cell_sum,
+    const float* __restrict__ cell_sumsq,
+    int n_genes, int n_cells,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= cell_b || cell_b >= n_cells) return;
+
+  int ia = csc_p[cell_a], ea = csc_p[cell_a + 1];
+  int ib = csc_p[cell_b], eb = csc_p[cell_b + 1];
+
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    int ga = csc_i[ia], gb = csc_i[ib];
+    if      (ga < gb) ++ia;
+    else if (gb < ga) ++ib;
+    else { dot += csc_x[ia] * csc_x[ib]; ++ia; ++ib; }
+  }
+
+  float n  = (float)n_genes;
+  float sa = cell_sum[cell_a],   sb = cell_sum[cell_b];
+  float qa = cell_sumsq[cell_a], qb = cell_sumsq[cell_b];
+
+  float cov = dot - sa * sb / n;
+  float va  = qa  - sa * sa / n;
+  float vb  = qb  - sb * sb / n;
+
+  result_out[cell_a * n_cells + cell_b] = 1.0f - cov / sqrtf(va * vb);
+}
+
+__global__ void RpearsonSparse_per_cell_pair_different_blocks(
+    const int* __restrict__ a_csc_p,
+    const int* __restrict__ a_csc_i,
+    const float* __restrict__ a_csc_x,
+    const float* __restrict__ a_sum,
+    const float* __restrict__ a_sumsq,
+    const int* __restrict__ b_csc_p,
+    const int* __restrict__ b_csc_i,
+    const float* __restrict__ b_csc_x,
+    const float* __restrict__ b_sum,
+    const float* __restrict__ b_sumsq,
+    int n_genes, int n_cells_a, int n_cells_b,
+    float* __restrict__ result_out)
+{
+  int cell_a = blockIdx.y * blockDim.y + threadIdx.y;
+  int cell_b = blockIdx.x * blockDim.x + threadIdx.x;
+  if (cell_a >= n_cells_a || cell_b >= n_cells_b) return;
+
+  int ia = a_csc_p[cell_a], ea = a_csc_p[cell_a + 1];
+  int ib = b_csc_p[cell_b], eb = b_csc_p[cell_b + 1];
+
+  float dot = 0;
+  while (ia < ea && ib < eb) {
+    int ga = a_csc_i[ia], gb = b_csc_i[ib];
+    if      (ga < gb) ++ia;
+    else if (gb < ga) ++ib;
+    else { dot += a_csc_x[ia] * b_csc_x[ib]; ++ia; ++ib; }
+  }
+
+  float n  = (float)n_genes;
+  float sa = a_sum[cell_a],   sb = b_sum[cell_b];
+  float qa = a_sumsq[cell_a], qb = b_sumsq[cell_b];
+
+  float cov = dot - sa * sb / n;
+  float va  = qa  - sa * sa / n;
+  float vb  = qb  - sb * sb / n;
+
+  result_out[cell_b * n_cells_a + cell_a] = 1.0f - cov / sqrtf(va * vb);
+}
+
+// ─── Drivers: Euclidean ───
+
+extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_same_block(
+    int* csc_i_in, int* csc_p_in, double* csc_x_in,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements, int* /*num_elements_b*/)
+{
+  int n_genes = *num_rows;  (void)n_genes;
+  int n_cells = *num_columns;
+  int nnz     = *num_elements;
+
+  std::vector<float> csc_x_f(nnz);
+  for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
+
+  int* d_i; int* d_p; float* d_x; float* d_res; double* d_out;
+  cudaMalloc(&d_i, nnz * sizeof(int));
+  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
+  cudaMalloc(&d_x, nnz * sizeof(float));
+  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
+  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+
+  cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells + 15) / 16, (n_cells + 15) / 16);
+
+  ReuclideanSparse_per_cell_pair_same_block<<<blocks, threads>>>(d_p, d_i, d_x, n_cells, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  FinalizePerCellPairFloat<<<blocks, threads>>>(n_cells, d_res, d_out);
+  gpuErrchk(cudaPeekAtLastError());
+
+  cudaMemcpy(result, d_out, n_cells * n_cells * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaFree(d_i); cudaFree(d_p); cudaFree(d_x); cudaFree(d_res); cudaFree(d_out);
+}
+
+extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_different_blocks(
+    int* a_i_in, int* a_p_in, double* a_x_in,
+    int* b_i_in, int* b_p_in, double* b_x_in,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+
+  std::vector<float> a_xf(nnz_a), b_xf(nnz_b);
+  for (int k = 0; k < nnz_a; ++k) a_xf[k] = (float)a_x_in[k];
+  for (int k = 0; k < nnz_b; ++k) b_xf[k] = (float)b_x_in[k];
+
+  int* d_ai; int* d_ap; float* d_ax;
+  int* d_bi; int* d_bp; float* d_bx;
+  float* d_res;
+  cudaMalloc(&d_ai, nnz_a * sizeof(int));
+  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
+  cudaMalloc(&d_ax, nnz_a * sizeof(float));
+  cudaMalloc(&d_bi, nnz_b * sizeof(int));
+  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
+  cudaMalloc(&d_bx, nnz_b * sizeof(float));
+  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+
+  cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ax, a_xf.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bi, b_i_in, nnz_b * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bp, b_p_in, (n_cells_b + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bx, b_xf.data(), nnz_b * sizeof(float), cudaMemcpyHostToDevice);
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells_b + 15) / 16, (n_cells_a + 15) / 16);
+
+  ReuclideanSparse_per_cell_pair_different_blocks<<<blocks, threads>>>(
+      d_ap, d_ai, d_ax, d_bp, d_bi, d_bx, n_cells_a, n_cells_b, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  std::vector<float> h_res(n_cells_a * n_cells_b);
+  cudaMemcpy(h_res.data(), d_res, n_cells_a * n_cells_b * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < n_cells_a * n_cells_b; ++i) result[i] = (double)h_res[i];
+
+  cudaFree(d_ai); cudaFree(d_ap); cudaFree(d_ax);
+  cudaFree(d_bi); cudaFree(d_bp); cudaFree(d_bx);
+  cudaFree(d_res);
+}
+
+// ─── Drivers: Manhattan ───
+
+extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_same_block(
+    int* csc_i_in, int* csc_p_in, double* csc_x_in,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements, int* /*num_elements_b*/)
+{
+  int n_cells = *num_columns;
+  int nnz     = *num_elements;
+
+  std::vector<float> csc_x_f(nnz);
+  for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
+
+  int* d_i; int* d_p; float* d_x; float* d_res; double* d_out;
+  cudaMalloc(&d_i, nnz * sizeof(int));
+  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
+  cudaMalloc(&d_x, nnz * sizeof(float));
+  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
+  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+
+  cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells + 15) / 16, (n_cells + 15) / 16);
+
+  RmanhattanSparse_per_cell_pair_same_block<<<blocks, threads>>>(d_p, d_i, d_x, n_cells, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  FinalizePerCellPairFloat<<<blocks, threads>>>(n_cells, d_res, d_out);
+  gpuErrchk(cudaPeekAtLastError());
+
+  cudaMemcpy(result, d_out, n_cells * n_cells * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaFree(d_i); cudaFree(d_p); cudaFree(d_x); cudaFree(d_res); cudaFree(d_out);
+}
+
+extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_different_blocks(
+    int* a_i_in, int* a_p_in, double* a_x_in,
+    int* b_i_in, int* b_p_in, double* b_x_in,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+
+  std::vector<float> a_xf(nnz_a), b_xf(nnz_b);
+  for (int k = 0; k < nnz_a; ++k) a_xf[k] = (float)a_x_in[k];
+  for (int k = 0; k < nnz_b; ++k) b_xf[k] = (float)b_x_in[k];
+
+  int* d_ai; int* d_ap; float* d_ax;
+  int* d_bi; int* d_bp; float* d_bx;
+  float* d_res;
+  cudaMalloc(&d_ai, nnz_a * sizeof(int));
+  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
+  cudaMalloc(&d_ax, nnz_a * sizeof(float));
+  cudaMalloc(&d_bi, nnz_b * sizeof(int));
+  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
+  cudaMalloc(&d_bx, nnz_b * sizeof(float));
+  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+
+  cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ax, a_xf.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bi, b_i_in, nnz_b * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bp, b_p_in, (n_cells_b + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bx, b_xf.data(), nnz_b * sizeof(float), cudaMemcpyHostToDevice);
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells_b + 15) / 16, (n_cells_a + 15) / 16);
+
+  RmanhattanSparse_per_cell_pair_different_blocks<<<blocks, threads>>>(
+      d_ap, d_ai, d_ax, d_bp, d_bi, d_bx, n_cells_a, n_cells_b, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  std::vector<float> h_res(n_cells_a * n_cells_b);
+  cudaMemcpy(h_res.data(), d_res, n_cells_a * n_cells_b * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < n_cells_a * n_cells_b; ++i) result[i] = (double)h_res[i];
+
+  cudaFree(d_ai); cudaFree(d_ap); cudaFree(d_ax);
+  cudaFree(d_bi); cudaFree(d_bp); cudaFree(d_bx);
+  cudaFree(d_res);
+}
+
+// ─── Drivers: Cosine ───
+
+extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_same_block(
+    int* csc_i_in, int* csc_p_in, double* csc_x_in,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements, int* /*num_elements_b*/)
+{
+  int n_cells = *num_columns;
+  int nnz     = *num_elements;
+
+  std::vector<float> csc_x_f(nnz);
+  for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
+
+  int* d_i; int* d_p; float* d_x; float* d_norms; float* d_res; double* d_out;
+  cudaMalloc(&d_i, nnz * sizeof(int));
+  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
+  cudaMalloc(&d_x, nnz * sizeof(float));
+  cudaMalloc(&d_norms, n_cells * sizeof(float));
+  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
+  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+
+  cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
+
+  int prep_threads = 256;
+  int prep_blocks = (n_cells + prep_threads - 1) / prep_threads;
+  compute_cell_norms<<<prep_blocks, prep_threads>>>(d_p, d_x, n_cells, d_norms);
+  gpuErrchk(cudaPeekAtLastError());
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells + 15) / 16, (n_cells + 15) / 16);
+
+  RcosineSparse_per_cell_pair_same_block<<<blocks, threads>>>(d_p, d_i, d_x, d_norms, n_cells, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  FinalizePerCellPairFloat<<<blocks, threads>>>(n_cells, d_res, d_out);
+  gpuErrchk(cudaPeekAtLastError());
+
+  cudaMemcpy(result, d_out, n_cells * n_cells * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaFree(d_i); cudaFree(d_p); cudaFree(d_x); cudaFree(d_norms); cudaFree(d_res); cudaFree(d_out);
+}
+
+extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_different_blocks(
+    int* a_i_in, int* a_p_in, double* a_x_in,
+    int* b_i_in, int* b_p_in, double* b_x_in,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+
+  std::vector<float> a_xf(nnz_a), b_xf(nnz_b);
+  for (int k = 0; k < nnz_a; ++k) a_xf[k] = (float)a_x_in[k];
+  for (int k = 0; k < nnz_b; ++k) b_xf[k] = (float)b_x_in[k];
+
+  int* d_ai; int* d_ap; float* d_ax; float* d_an;
+  int* d_bi; int* d_bp; float* d_bx; float* d_bn;
+  float* d_res;
+  cudaMalloc(&d_ai, nnz_a * sizeof(int));
+  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
+  cudaMalloc(&d_ax, nnz_a * sizeof(float));
+  cudaMalloc(&d_an, n_cells_a * sizeof(float));
+  cudaMalloc(&d_bi, nnz_b * sizeof(int));
+  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
+  cudaMalloc(&d_bx, nnz_b * sizeof(float));
+  cudaMalloc(&d_bn, n_cells_b * sizeof(float));
+  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+
+  cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ax, a_xf.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bi, b_i_in, nnz_b * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bp, b_p_in, (n_cells_b + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bx, b_xf.data(), nnz_b * sizeof(float), cudaMemcpyHostToDevice);
+
+  int prep_threads = 256;
+  compute_cell_norms<<<(n_cells_a + prep_threads - 1) / prep_threads, prep_threads>>>(d_ap, d_ax, n_cells_a, d_an);
+  compute_cell_norms<<<(n_cells_b + prep_threads - 1) / prep_threads, prep_threads>>>(d_bp, d_bx, n_cells_b, d_bn);
+  gpuErrchk(cudaPeekAtLastError());
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells_b + 15) / 16, (n_cells_a + 15) / 16);
+
+  RcosineSparse_per_cell_pair_different_blocks<<<blocks, threads>>>(
+      d_ap, d_ai, d_ax, d_an, d_bp, d_bi, d_bx, d_bn, n_cells_a, n_cells_b, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  std::vector<float> h_res(n_cells_a * n_cells_b);
+  cudaMemcpy(h_res.data(), d_res, n_cells_a * n_cells_b * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < n_cells_a * n_cells_b; ++i) result[i] = (double)h_res[i];
+
+  cudaFree(d_ai); cudaFree(d_ap); cudaFree(d_ax); cudaFree(d_an);
+  cudaFree(d_bi); cudaFree(d_bp); cudaFree(d_bx); cudaFree(d_bn);
+  cudaFree(d_res);
+}
+
+// ─── Drivers: Pearson ───
+
+extern "C" void matrix_Pearson_sparse_per_cell_pair_distance_same_block(
+    int* csc_i_in, int* csc_p_in, double* csc_x_in,
+    int* /*b*/, int* /*b*/, double* /*b*/,
+    double* result, int* num_rows, int* num_columns,
+    int* /*num_columns_b*/, int* num_elements, int* /*num_elements_b*/)
+{
+  int n_genes = *num_rows;
+  int n_cells = *num_columns;
+  int nnz     = *num_elements;
+
+  std::vector<float> csc_x_f(nnz);
+  for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
+
+  int* d_i; int* d_p; float* d_x;
+  float* d_sum; float* d_sumsq;
+  float* d_res; double* d_out;
+  cudaMalloc(&d_i, nnz * sizeof(int));
+  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
+  cudaMalloc(&d_x, nnz * sizeof(float));
+  cudaMalloc(&d_sum, n_cells * sizeof(float));
+  cudaMalloc(&d_sumsq, n_cells * sizeof(float));
+  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
+  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+
+  cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
+
+  int prep_threads = 256;
+  int prep_blocks = (n_cells + prep_threads - 1) / prep_threads;
+  compute_cell_sum_sumsq<<<prep_blocks, prep_threads>>>(d_p, d_x, n_cells, d_sum, d_sumsq);
+  gpuErrchk(cudaPeekAtLastError());
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells + 15) / 16, (n_cells + 15) / 16);
+
+  RpearsonSparse_per_cell_pair_same_block<<<blocks, threads>>>(
+      d_p, d_i, d_x, d_sum, d_sumsq, n_genes, n_cells, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  FinalizePerCellPairFloat<<<blocks, threads>>>(n_cells, d_res, d_out);
+  gpuErrchk(cudaPeekAtLastError());
+
+  cudaMemcpy(result, d_out, n_cells * n_cells * sizeof(double), cudaMemcpyDeviceToHost);
+  cudaFree(d_i); cudaFree(d_p); cudaFree(d_x);
+  cudaFree(d_sum); cudaFree(d_sumsq);
+  cudaFree(d_res); cudaFree(d_out);
+}
+
+extern "C" void matrix_Pearson_sparse_per_cell_pair_distance_different_blocks(
+    int* a_i_in, int* a_p_in, double* a_x_in,
+    int* b_i_in, int* b_p_in, double* b_x_in,
+    double* result, int* num_rows, int* num_columns,
+    int* num_columns_b, int* num_elements_a, int* num_elements_b)
+{
+  int n_genes   = *num_rows;
+  int n_cells_a = *num_columns;
+  int n_cells_b = *num_columns_b;
+  int nnz_a = *num_elements_a;
+  int nnz_b = *num_elements_b;
+
+  std::vector<float> a_xf(nnz_a), b_xf(nnz_b);
+  for (int k = 0; k < nnz_a; ++k) a_xf[k] = (float)a_x_in[k];
+  for (int k = 0; k < nnz_b; ++k) b_xf[k] = (float)b_x_in[k];
+
+  int* d_ai; int* d_ap; float* d_ax; float* d_as; float* d_aq;
+  int* d_bi; int* d_bp; float* d_bx; float* d_bs; float* d_bq;
+  float* d_res;
+  cudaMalloc(&d_ai, nnz_a * sizeof(int));
+  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
+  cudaMalloc(&d_ax, nnz_a * sizeof(float));
+  cudaMalloc(&d_as, n_cells_a * sizeof(float));
+  cudaMalloc(&d_aq, n_cells_a * sizeof(float));
+  cudaMalloc(&d_bi, nnz_b * sizeof(int));
+  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
+  cudaMalloc(&d_bx, nnz_b * sizeof(float));
+  cudaMalloc(&d_bs, n_cells_b * sizeof(float));
+  cudaMalloc(&d_bq, n_cells_b * sizeof(float));
+  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+
+  cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_ax, a_xf.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bi, b_i_in, nnz_b * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bp, b_p_in, (n_cells_b + 1) * sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_bx, b_xf.data(), nnz_b * sizeof(float), cudaMemcpyHostToDevice);
+
+  int prep_threads = 256;
+  compute_cell_sum_sumsq<<<(n_cells_a + prep_threads - 1) / prep_threads, prep_threads>>>(d_ap, d_ax, n_cells_a, d_as, d_aq);
+  compute_cell_sum_sumsq<<<(n_cells_b + prep_threads - 1) / prep_threads, prep_threads>>>(d_bp, d_bx, n_cells_b, d_bs, d_bq);
+  gpuErrchk(cudaPeekAtLastError());
+
+  dim3 threads(16, 16);
+  dim3 blocks((n_cells_b + 15) / 16, (n_cells_a + 15) / 16);
+
+  RpearsonSparse_per_cell_pair_different_blocks<<<blocks, threads>>>(
+      d_ap, d_ai, d_ax, d_as, d_aq,
+      d_bp, d_bi, d_bx, d_bs, d_bq,
+      n_genes, n_cells_a, n_cells_b, d_res);
+  gpuErrchk(cudaPeekAtLastError());
+
+  std::vector<float> h_res(n_cells_a * n_cells_b);
+  cudaMemcpy(h_res.data(), d_res, n_cells_a * n_cells_b * sizeof(float), cudaMemcpyDeviceToHost);
+  for (int i = 0; i < n_cells_a * n_cells_b; ++i) result[i] = (double)h_res[i];
+
+  cudaFree(d_ai); cudaFree(d_ap); cudaFree(d_ax); cudaFree(d_as); cudaFree(d_aq);
+  cudaFree(d_bi); cudaFree(d_bp); cudaFree(d_bx); cudaFree(d_bs); cudaFree(d_bq);
+  cudaFree(d_res);
+}
+
 // ==================== Spearman ====================
 
 // Rank columns and center (subtract mean rank = (n+1)/2) so that
