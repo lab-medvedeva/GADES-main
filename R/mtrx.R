@@ -30,8 +30,14 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
             fn_name <- glue("matrix_Kendall{postfix}_distance_same_block")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_same_block")
+        } else if(metric =='cosine') {
+            fn_name <- glue("matrix_Cosine{postfix}_distance_same_block")
         } else if(metric =='pearson') {
-            fn_name <- glue("matrix_Pearson{postfix}_distance_same_block") #for not different block
+            fn_name <- glue("matrix_Pearson{postfix}_distance_same_block")
+        } else if(metric =='manhattan') {
+            fn_name <- glue("matrix_Manhattan{postfix}_distance_same_block")
+        } else if(metric =='spearman') {
+            fn_name <- glue("matrix_Spearman{postfix}_distance_same_block")
         } else {
 	    fn_name <- "matrix_Kendall_distance_same_block"
 	}
@@ -40,8 +46,14 @@ process_batch <- function(count_matrix, first_index, second_index, batch_size, m
             fn_name <- glue("matrix_Kendall{postfix}_distance_different_blocks")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_different_blocks")
+        } else if(metric =='cosine') {
+            fn_name <- glue("matrix_Cosine{postfix}_distance_different_blocks")
         } else if(metric =='pearson') {
             fn_name <- glue("matrix_Pearson{postfix}_distance_different_blocks")
+        } else if(metric =='manhattan') {
+            fn_name <- glue("matrix_Manhattan{postfix}_distance_different_blocks")
+        } else if(metric =='spearman') {
+            fn_name <- glue("matrix_Spearman{postfix}_distance_different_blocks")
         } else {
 	    fn_name <-"matrix_kendall_distance_different_blocks"
 	}
@@ -158,8 +170,14 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
             fn_name <- glue("matrix_Kendall{postfix}_distance_same_block_cpu")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_same_block_cpu")
+        } else if(metric =='cosine') {
+            fn_name <- glue("matrix_Cosine{postfix}_distance_same_block_cpu")
         } else if(metric =='pearson') {
-            fn_name <- glue("matrix_Pearson{postfix}_distance_same_block_cpu") #For not different block
+            fn_name <- glue("matrix_Pearson{postfix}_distance_same_block_cpu")
+        } else if(metric =='manhattan') {
+            fn_name <- glue("matrix_Manhattan{postfix}_distance_same_block_cpu")
+        } else if(metric =='spearman') {
+            fn_name <- glue("matrix_Spearman{postfix}_distance_same_block_cpu")
         } else {
 	    fn_name <- glue("matrix_Kendall{postfix}_distance_same_block_cpu")
 	}
@@ -168,8 +186,14 @@ process_batch_cpu <- function(count_matrix, first_index, second_index, batch_siz
             fn_name <- glue("matrix_Kendall{postfix}_distance_different_blocks_cpu")
         } else if(metric =='euclidean') {
             fn_name <- glue("matrix_Euclidean{postfix}_distance_different_blocks_cpu")
+        } else if(metric =='cosine') {
+            fn_name <- glue("matrix_Cosine{postfix}_distance_different_blocks_cpu")
         } else if(metric =='pearson') {
             fn_name <- glue("matrix_Pearson{postfix}_distance_different_blocks_cpu")
+        } else if(metric =='manhattan') {
+            fn_name <- glue("matrix_Manhattan{postfix}_distance_different_blocks_cpu")
+        } else if(metric =='spearman') {
+            fn_name <- glue("matrix_Spearman{postfix}_distance_different_blocks_cpu")
         }
         else {
             fn_name <-glue("matrix_Kendall{postfix}_distance_different_blocks_cpu")

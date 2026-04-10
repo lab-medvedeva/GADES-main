@@ -42,9 +42,13 @@ print(glue("{output}_{method}_{metric}.csv"))
 print(sparse)
 
 if (sparse) {
-    data <- readMM(datain)
+    data <- t(readMM(datain))
 } else {
-    data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
+    if (grepl("\\.mtx$", datain, ignore.case = TRUE)) {
+        data <- as.matrix(t(readMM(datain)))
+    } else {
+        data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
+    }
 }
 
 #batch_size <- ceiling(dim(data)[2] / num_batches)
@@ -89,16 +93,27 @@ for (i in 1:times) {
     } else if (method == 'amap') {
         
         print('Calc dist')
-
+        if (metric == 'cosine') {
+            metric = 'correlation'
+        }
         distMatrix_mtrx <- as.matrix(Dist(t_mtx, method=metric, nbproc=24))
         print(dim(distMatrix_mtrx))
         print('amap')
+        if (metric == 'correlation') {
+            metric = 'cosine'
+        }
         #print(distMatrix_mtrx)
     } else if (method == 'factoextra') {
         #if (!sparse) {
         #    data <- as.matrix(data)
         #}
+        if (metric == 'cosine') {
+            metric = 'pearson'
+        }
         distMatrix_mtrx <- as.matrix(get_dist(t_mtx, method=metric))
+        if (metric == 'pearson') {
+            metric = 'cosine'
+        }
         print(dim(distMatrix_mtrx))
         print('Factoextra')
     } else if (method == 'philentropy') {
