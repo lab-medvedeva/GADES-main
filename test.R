@@ -38,6 +38,11 @@ if (profile) {
 }
 #filename = args[8]
 
+profile = as.logical(args[9])
+
+if (profile) {
+    library(profmem)
+}
 print('Reading table')
 print(glue("{output}_{method}_{metric}.csv"))
 print(sparse)

@@ -3,7 +3,6 @@
 #  if you regenerate with roxygen2)
 
 export(mtrx_distance)
-export(mtrx_read_kdm)
 export(process_batch)
 export(process_batch_cpu)
 

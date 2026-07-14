@@ -4,22 +4,24 @@ This repo provides code that calculates pairwise matrix distances for dense and 
 
 ## Prerequisities
 
-* R 4.0.0+
+* R 4.3.0+
 * CMake 3.10+
 * (Optional) CUDA 11+
 
 ## Installation instructions
 
-### Docker image start
+### Docker image start CUDA
+
+Please, install [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) first.
 
 ```shell
-docker run --names gades-gpu akhtyamovpavel/gades:gpu
+docker run --name gades --gpus all -it akhtyamovpavel/gades-gpu
 ```
 
 ### Local installation
 ```shell
 git clone https://github.com/lab-medvedeva/GADES-main.git
-cd GADES
+cd GADES-main
 Rscript install.R
 ```
 This command builds code of the library using CMake, checks GPU and install package using CPU+GPU or only CPU code.
@@ -39,30 +41,29 @@ make
 
 ### Dense mode
 ```R
-library(HobotnicaGPU)
+library(GADES)
 
-mtx<-matrix(runif(100000),nrow=100)
-dense.mtx <- as.matrix(read.table(mtx, header=T, row.names = 1, sep=","))
-dist.matrix <- mtrx_distance(dense.mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F)
+mtx <- matrix(runif(100000), nrow=100)
+
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=F, write=T)
 ```
 
 ### Sparse mode
 ```R
-library(HobotnicaGPU)
+library(GADES)
+library(Matrix)
 
+mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
 
-matrix <- rsparsematrix(nrow, ncol, density)
-
-matrix <- Matrix::readMM('./matrix.mtx')
-dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='cpu', sparse=T, write=T)
 ```
 
 ### Sparse mode - GPU
 ```R
-library(HobotnicaGPU)
+library(GADES)
 library(Matrix)
-matrix <- Matrix::readMM(matrix.mtx')
-dist.matrix <- mtrx_distance(matrix, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T)
+mtx <- rsparsematrix(nrow=100, ncol=1000, density=0.1)
+dist.matrix <- mtrx_distance(mtx, batch_size = 5000, metric = 'kendall', type='gpu', sparse=T, write=T)
 ```
 
 
