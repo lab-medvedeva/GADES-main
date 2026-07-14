@@ -44,11 +44,18 @@ jobs:
         working-directory: python
         run: pytest tests/ -v -m "not gpu" --tb=short
 
-  # ── GPU build + tests (CUDA runner) ─────────────────────────────────────
+  # ── GPU build + tests (self-hosted CUDA runner) ─────────────────────────
+  # Runs on a self-hosted runner inside the CUDA devel image. The GPU is
+  # passed through with `--gpus all`, which needs the nvidia-container-toolkit
+  # installed on the runner host. The container itself is a bare CUDA image,
+  # so python/OpenBLAS/cmake are installed per-run.
+  # Image tag matches the runner's driver (530.41.03 → CUDA 12.1); a newer
+  # runtime (12.4) would need driver ≥ 550.
   gpu-tests:
-    runs-on: ubuntu-22.04
+    runs-on: self-hosted
     container:
-      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+      image: nvidia/cuda:12.1.1-devel-ubuntu22.04
+      options: --gpus all
     steps:
       - uses: actions/checkout@v4
 
