@@ -3,7 +3,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
-// Shared cross-TU declarations (ADR-0002, candidate 2). Host drivers +
+// Shared cross-TU declarations. Host drivers +
 // kernels launched from more than one metric TU. Keep external linkage.
 void pc_fallback_cosine_diff(const float* A, const float* B, int n, int m, int m_b, float* D, const float* xn, const float* yn);
 void pc_fallback_cosine_same(const float* A, int n, int m, float* D, const float* norms);

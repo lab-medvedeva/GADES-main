@@ -1,7 +1,7 @@
 .onLoad <- function(libname, pkgname) {
    # CPU backend (mtrx_cpu.so) is always built; the GPU backend (mtrx.so) only
    # when CUDA was available at build time. Load the GPU lib optionally so the
-   # package still loads on CPU-only deploys (candidate 6 / ADR-0005).
+   # package still loads on CPU-only deploys.
    library.dynam('mtrx_cpu', package = pkgname, lib.loc = libname)
    gpu <- tryCatch({
        library.dynam('mtrx', package = pkgname, lib.loc = libname); TRUE
@@ -414,7 +414,7 @@ process_pair_per_cell_pair <- function(submat_a, submat_b, n_genes, metric, type
 #' @return TRUE on success, or list(status="memory_limit", ...) if the limit
 #'   was tripped.
 #' @export
-# Placement policy (ADR-0005 / candidate 5): try the .Call fast paths that avoid
+# Placement policy: try the .Call fast paths that avoid
 # the .C block-loop's per-batch coercion + output duplication, in order:
 #   1. dense GPU batched (euc/cos/pear/manh, any m)   -> C_dense_block_batched
 #   2. dense single-.Call full matrix (ncol <= batch) -> C_dense_block[_cpu]

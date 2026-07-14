@@ -8,7 +8,7 @@
 //
 // Kernels are `static __global__` and host helpers `static`, so every TU that
 // includes this header gets its own inlined copy — no cross-TU device symbols,
-// hence NO -rdc=true / device linking (ADR-0002).
+// hence NO -rdc=true / device linking.
 // ============================================================================
 
 #include <cstddef>

@@ -24,13 +24,24 @@ if(NOT OPENBLAS_LIB)
     message(FATAL_ERROR "OpenBLAS not found. Install with: sudo apt install libopenblas-dev")
 endif()
 
+# Per-metric split: main.cpp was replaced by one .cpp per metric +
+# the shared cuBLAS/cblas GEMM core (pc_corr_core). The Python api_cpu layer
+# only calls the metric drivers, so dispatch.cpp / register_mtrx_cpu.cpp (the
+# R .Call/registration glue) are intentionally left out here.
 add_library(_gades_cpu SHARED
-    ${SRC_DIR}/main.cpp
+    ${SRC_DIR}/pc_corr_core.cpp
+    ${SRC_DIR}/metrics/euclidean.cpp
+    ${SRC_DIR}/metrics/cosine.cpp
+    ${SRC_DIR}/metrics/pearson.cpp
+    ${SRC_DIR}/metrics/spearman.cpp
+    ${SRC_DIR}/metrics/kendall.cpp
+    ${SRC_DIR}/metrics/manhattan.cpp
     csrc/api_cpu.cpp
 )
 set_target_properties(_gades_cpu PROPERTIES PREFIX "")
 target_include_directories(_gades_cpu PRIVATE
     ${STUB_DIR}            # R.h / Rinternals.h stubs (must come before system)
+    ${SRC_DIR}             # pc_corr_core_cpu.h / pc_runtime_cpu.h / pc_linalg_cpu.h
     ${OPENBLAS_INCLUDE}
 )
 target_compile_options(_gades_cpu PRIVATE -O3 -DNDEBUG -fopenmp)
@@ -55,15 +66,31 @@ if(CMAKE_CUDA_COMPILER)
 
     find_package(CUDAToolkit REQUIRED)
 
+    # Per-metric split: main.cu → dispatch (provides check_gpu) +
+    # shared GEMM core + runtime state + sparse-Kendall launch policy + one .cu
+    # per metric. register_mtrx.cu (R registration) is not needed for the
+    # ctypes-facing Python lib.
     add_library(_gades_gpu SHARED
-        ${SRC_DIR}/main.cu
+        ${SRC_DIR}/dispatch.cu
+        ${SRC_DIR}/pc_corr_core.cu
+        ${SRC_DIR}/pc_runtime.cu
+        ${SRC_DIR}/pcp_dispatch.cu
+        ${SRC_DIR}/metrics/euclidean.cu
+        ${SRC_DIR}/metrics/cosine.cu
+        ${SRC_DIR}/metrics/pearson.cu
+        ${SRC_DIR}/metrics/spearman.cu
+        ${SRC_DIR}/metrics/kendall.cu
+        ${SRC_DIR}/metrics/manhattan.cu
         csrc/api_gpu.cu
     )
     set_target_properties(_gades_gpu PROPERTIES
         PREFIX ""
         CUDA_SEPARABLE_COMPILATION OFF
     )
-    target_include_directories(_gades_gpu PRIVATE ${STUB_DIR})
+    target_include_directories(_gades_gpu PRIVATE
+        ${STUB_DIR}        # R.h / Rinternals.h stubs
+        ${SRC_DIR}         # pc_runtime.cuh / pc_linalg.cuh / pc_corr_core.cuh
+    )
     target_compile_options(_gades_gpu PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3 --expt-relaxed-constexpr -Xcompiler=-fopenmp>
     )

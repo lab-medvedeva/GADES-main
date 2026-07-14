@@ -5,7 +5,7 @@
 // pc_linalg_cpu — CPU-side metric-agnostic numeric utilities (CPU analog of
 // pc_linalg): per-column norms, centering, CSR->dense densify, and Spearman
 // rank transforms. Shared across the cosine/euclidean/pearson/spearman CPU
-// drivers. Not runtime policy (see pc_runtime_cpu) — ADR-0002.
+// drivers. Not runtime policy (see pc_runtime_cpu).
 // ============================================================================
 
 #include <cstddef>

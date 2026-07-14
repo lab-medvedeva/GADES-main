@@ -13,7 +13,7 @@
 #include "pc_runtime.cuh"
 #include "pc_linalg.cuh"
 #include "pc_corr_core.cuh"
-#include "pcp_dispatch.cuh"   // host-only pcp launch-config policy (ADR-0003)
+#include "pcp_dispatch.cuh"   // host-only pcp launch-config policy
 
 
 
@@ -1523,10 +1523,10 @@ __global__ void RkendallPCP_Dispatch_different_blocks(
 
 
 // ---------- host helpers ----------
-// pcp_max_col_nnz moved to pcp_dispatch (ADR-0003).
+// pcp_max_col_nnz moved to pcp_dispatch.
 
 
-// pcp_grid_for_scratch moved to pcp_dispatch (ADR-0003).
+// pcp_grid_for_scratch moved to pcp_dispatch.
 
 
 // ---------- Variant A drivers ----------
@@ -1695,7 +1695,7 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_hybrid_distance_different_bl
 
 
 // ---------- Variant B drivers ----------
-// pcp_warps_per_block moved to pcp_dispatch (ADR-0003).
+// pcp_warps_per_block moved to pcp_dispatch.
 
 
 static void pcp_B_same_block_impl(
@@ -1818,11 +1818,11 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_b0_distance_different_blocks
 // Device-queried opt-in shared budget (cached). NOT hardcoded 96 KiB: query
 // cudaDevAttrMaxSharedMemoryPerBlockOptin so the kernel uses the real per-block
 // shared ceiling of whatever GPU it runs on (Turing 64 KiB ... B200 228 KiB).
-// pcp_device_smem_budget moved to pcp_dispatch (ADR-0003).
+// pcp_device_smem_budget moved to pcp_dispatch.
 
 
 // PcpDispatchCfg + pcp_dispatch_cfg (dynamic-occupancy launch config) moved to
-// pcp_dispatch.cu / pcp_dispatch.cuh (ADR-0003). The dispatch KERNELS stay here.
+// pcp_dispatch.cu / pcp_dispatch.cuh. The dispatch KERNELS stay here.
 
 
 extern "C" void matrix_Kendall_sparse_per_cell_pair_dispatch_distance_same_block(

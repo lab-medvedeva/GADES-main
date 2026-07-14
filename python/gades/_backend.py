@@ -9,11 +9,30 @@ c_int_p = POINTER(c_int)
 
 _DENSE_ARGTYPES = [c_double_p, c_double_p, c_int, c_int, c_int]
 _DENSE_PW_ARGTYPES = [c_double_p, c_double_p, c_double_p, c_int, c_int, c_int, c_int]
-_SPARSE_ARGTYPES = [c_int_p, c_int_p, c_double_p, c_double_p, c_int, c_int, c_int, c_int]
+_SPARSE_ARGTYPES = [
+    c_int_p,
+    c_int_p,
+    c_double_p,
+    c_double_p,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+]
 _SPARSE_PW_ARGTYPES = [
-    c_int_p, c_int_p, c_double_p,
-    c_int_p, c_int_p, c_double_p,
-    c_double_p, c_int, c_int, c_int, c_int, c_int, c_int,
+    c_int_p,
+    c_int_p,
+    c_double_p,
+    c_int_p,
+    c_int_p,
+    c_double_p,
+    c_double_p,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
+    c_int,
 ]
 
 

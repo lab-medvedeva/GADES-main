@@ -36,7 +36,7 @@ find_package(R REQUIRED)
 
 if(CUDA_FOUND)
 
-	# Per-metric split (ADR-0002, candidate 2): one .cu per metric + shared
+	# Per-metric split: one .cu per metric + shared
 	# GEMM core + thin dispatch router + runtime state. pc_linalg.cuh /
 	# pc_corr_core.cuh / pc_runtime.cuh are header-only.
 	cuda_add_library(
@@ -93,8 +93,7 @@ install(
 
 # Benchmark executables (ArrayFire / Armadillo) are OFF by default so the
 # package configure stays clean without those deps (find_package(Armadillo)
-# etc.). Enable with -DGADES_BUILD_BENCH=ON. (Full package/bench split: ADR-0002
-# follow-up / candidate 6.)
+# etc.). Enable with -DGADES_BUILD_BENCH=ON.
 option(GADES_BUILD_BENCH "Build ArrayFire/Armadillo benchmark executables" OFF)
 if(GADES_BUILD_BENCH)
 

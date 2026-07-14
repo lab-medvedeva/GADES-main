@@ -9,6 +9,7 @@ import gades
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def dense_matrix():
     rng = np.random.default_rng(42)
@@ -18,11 +19,11 @@ def dense_matrix():
 @pytest.fixture
 def sparse_matrix():
     rng = np.random.default_rng(42)
-    return scipy.sparse.random(100, 30, density=0.3, format="csc",
-                               random_state=rng)
+    return scipy.sparse.random(100, 30, density=0.3, format="csc", random_state=rng)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+
 
 def scipy_pdist(X, metric):
     """Reference distance matrix via scipy."""
@@ -42,6 +43,7 @@ def scipy_pdist(X, metric):
         d = 1.0 - np.corrcoef(X.T)
     elif metric == "spearman":
         from scipy.stats import spearmanr
+
         corr, _ = spearmanr(X, axis=0)
         if X.shape[1] == 2:
             d = np.array([[0.0, 1.0 - corr], [1.0 - corr, 0.0]])
@@ -50,6 +52,7 @@ def scipy_pdist(X, metric):
     elif metric == "kendall":
         # GADES Kendall = discordant_pairs / total_pairs = (1 - tau) / 2
         from scipy.stats import kendalltau
+
         m = X.shape[1]
         d = np.zeros((m, m))
         for i in range(m):
@@ -62,6 +65,7 @@ def scipy_pdist(X, metric):
 
 
 # ── Dense CPU tests ───────────────────────────────────────────────────────
+
 
 class TestDenseCPU:
     @pytest.mark.parametrize("metric", ["euclidean", "manhattan", "cosine"])
@@ -107,6 +111,7 @@ class TestDenseCPU:
 
 # ── Sparse CPU tests ──────────────────────────────────────────────────────
 
+
 class TestSparseCPU:
     @pytest.mark.parametrize("metric", ["euclidean", "manhattan", "cosine"])
     def test_basic_metrics(self, sparse_matrix, metric):
@@ -133,8 +138,7 @@ class TestSparseCPU:
         # scipy's dense kendalltau (which ignores sparsity structure).
         # Validate symmetry and zero diagonal instead.
         rng = np.random.default_rng(99)
-        X = scipy.sparse.random(20, 8, density=0.4, format="csc",
-                                random_state=rng)
+        X = scipy.sparse.random(20, 8, density=0.4, format="csc", random_state=rng)
         D = gades.distance(X, metric="kendall", backend="cpu")
         assert D.shape == (8, 8)
         assert_allclose(D, D.T, atol=1e-10)
@@ -148,6 +152,7 @@ class TestSparseCPU:
 
 
 # ── GPU tests ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.gpu
 class TestDenseGPU:
@@ -174,8 +179,13 @@ class TestDenseGPU:
         for metric in gades.SUPPORTED_METRICS:
             D_gpu = gades.distance(dense_matrix, metric=metric, backend="gpu")
             D_cpu = gades.distance(dense_matrix, metric=metric, backend="cpu")
-            assert_allclose(D_gpu, D_cpu, rtol=1e-3, atol=1e-3,
-                            err_msg=f"GPU/CPU mismatch for {metric}")
+            assert_allclose(
+                D_gpu,
+                D_cpu,
+                rtol=1e-3,
+                atol=1e-3,
+                err_msg=f"GPU/CPU mismatch for {metric}",
+            )
 
 
 @pytest.mark.gpu
@@ -189,6 +199,7 @@ class TestSparseGPU:
 
 
 # ── Edge cases ────────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_invalid_metric(self):

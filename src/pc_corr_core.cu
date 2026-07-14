@@ -22,9 +22,9 @@
 // L2 norms, which cuBLAS computes orders of magnitude faster than the original
 // atomic-add kernels. See prototype_cublas/ for the validation harness.
 
-// Column reductions, centering and gram-normalize kernels moved to pc_linalg (ADR-0002).
+// Column reductions, centering and gram-normalize kernels moved to pc_linalg.
 
-// cuBLAS handles + compute-only kernel timer moved to pc_runtime (ADR-0002).
+// cuBLAS handles + compute-only kernel timer moved to pc_runtime.
 
 // Core: D = cosine distance between columns of d_A (same-block), col-major m x m.
 void pc_cosine_same_block_device(const float* d_A, int n, int m,
@@ -69,7 +69,7 @@ void pc_cosine_different_blocks_device(const float* d_A,
 }
 
 
-// pc_center_columns_device and PCCol_sq_kernel moved to pc_linalg (ADR-0002).
+// pc_center_columns_device and PCCol_sq_kernel moved to pc_linalg.
 
 // D[i,j] = sqrt(max(sq[i] + sq[j] - 2*G[i,j], 0)); diagonal = 0.
 // Column-major m x m. The max(...,0) guards against catastrophic cancellation
@@ -153,7 +153,7 @@ void pc_euclidean_different_blocks_device(const float* d_A,
 }
 
 
-// PCCsr_to_dense_kernel and pc_sparse_to_dense_device moved to pc_linalg (ADR-0002).
+// PCCsr_to_dense_kernel and pc_sparse_to_dense_device moved to pc_linalg.
 
 // R-facing driver glue: converts R's double* input to float, runs core, copies
 // col-major m x m_b float back to R's double output.

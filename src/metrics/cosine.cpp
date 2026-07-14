@@ -16,7 +16,7 @@
 
 
 
-// pc_sparse_to_dense_cpu moved to pc_linalg_cpu (ADR-0002).
+// pc_sparse_to_dense_cpu moved to pc_linalg_cpu.
 
 void pc_drive_cpu_sparse_cosine_same(int* a_index, int* a_positions,
                                             double* a_values, double* c,

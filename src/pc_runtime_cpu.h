@@ -7,7 +7,7 @@
 // Unlike the GPU side there is NO cached resource handle to own: the only shared
 // global state is OpenBLAS's process-global thread count, and that is
 // save/restored per driver call by PCBlasThreadsGuard (never cached). So this
-// header is stateless BLAS/OpenMP policy + work-splitting helpers (ADR-0002).
+// header is stateless BLAS/OpenMP policy + work-splitting helpers.
 // The CPU RAM guard lives in R (memory_limit_gb), not here.
 // ============================================================================
 

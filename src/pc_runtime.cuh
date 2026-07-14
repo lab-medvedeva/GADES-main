@@ -12,7 +12,7 @@
 //
 // Thread-safety contract: single-threaded R driver ONLY. The cuBLAS handle
 // singletons and the pinned pool are unlocked globals; concurrent host callers
-// would race. GADES deploys as one R process with one driver thread (ADR-0002).
+// would race. GADES deploys as one R process with one driver thread.
 // ============================================================================
 
 #include <cstdlib>

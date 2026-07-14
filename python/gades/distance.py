@@ -29,10 +29,7 @@ def _resolve_backend(requested: str):
 def _metric_code(metric: str) -> int:
     m = metric.lower()
     if m not in METRICS:
-        raise ValueError(
-            f"Unknown metric '{metric}'. "
-            f"Supported: {', '.join(METRICS)}"
-        )
+        raise ValueError(f"Unknown metric '{metric}'. Supported: {', '.join(METRICS)}")
     return METRICS[m]
 
 
@@ -88,7 +85,10 @@ def distance(
                 indptr.ctypes.data_as(_backend.gpu.gades_sparse_gpu.argtypes[1]),
                 data.ctypes.data_as(_backend.gpu.gades_sparse_gpu.argtypes[2]),
                 out.ctypes.data_as(_backend.gpu.gades_sparse_gpu.argtypes[3]),
-                n, m, nnz, mc,
+                n,
+                m,
+                nnz,
+                mc,
             )
         else:
             rc = _backend.cpu.gades_sparse_cpu(
@@ -96,7 +96,10 @@ def distance(
                 indptr.ctypes.data_as(_backend.cpu.gades_sparse_cpu.argtypes[1]),
                 data.ctypes.data_as(_backend.cpu.gades_sparse_cpu.argtypes[2]),
                 out.ctypes.data_as(_backend.cpu.gades_sparse_cpu.argtypes[3]),
-                n, m, nnz, mc,
+                n,
+                m,
+                nnz,
+                mc,
             )
         if rc != 0:
             raise RuntimeError(f"Backend returned error code {rc}")
@@ -110,13 +113,17 @@ def distance(
         rc = _backend.gpu.gades_dense_gpu(
             X_f.ctypes.data_as(_backend.gpu.gades_dense_gpu.argtypes[0]),
             out.ctypes.data_as(_backend.gpu.gades_dense_gpu.argtypes[1]),
-            n, m, mc,
+            n,
+            m,
+            mc,
         )
     else:
         rc = _backend.cpu.gades_dense_cpu(
             X_f.ctypes.data_as(_backend.cpu.gades_dense_cpu.argtypes[0]),
             out.ctypes.data_as(_backend.cpu.gades_dense_cpu.argtypes[1]),
-            n, m, mc,
+            n,
+            m,
+            mc,
         )
     if rc != 0:
         raise RuntimeError(f"Backend returned error code {rc}")
@@ -172,7 +179,12 @@ def pairwise_distance(
             bp.ctypes.data_as(fn.argtypes[4]),
             bx.ctypes.data_as(fn.argtypes[5]),
             out.ctypes.data_as(fn.argtypes[6]),
-            n_a, m_a, m_b, nnz_a, nnz_b, mc,
+            n_a,
+            m_a,
+            m_b,
+            nnz_a,
+            nnz_b,
+            mc,
         )
         if rc != 0:
             raise RuntimeError(f"Backend returned error code {rc}")
@@ -197,7 +209,10 @@ def pairwise_distance(
         X_f.ctypes.data_as(fn.argtypes[0]),
         Y_f.ctypes.data_as(fn.argtypes[1]),
         out.ctypes.data_as(fn.argtypes[2]),
-        n, m_a, m_b, mc,
+        n,
+        m_a,
+        m_b,
+        mc,
     )
     if rc != 0:
         raise RuntimeError(f"Backend returned error code {rc}")

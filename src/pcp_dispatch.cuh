@@ -3,7 +3,7 @@
 
 // ============================================================================
 // pcp_dispatch — host-only launch-configuration policy for the sparse Kendall
-// per-cell-pair kernels (ADR-0003, candidate 3).
+// per-cell-pair kernels.
 //
 // Derives the occupancy / shared-memory budget / warp count (cap_smem, W,
 // smem_bytes, needs_fallback) from the DEVICE budget for a given heaviest-pair
@@ -11,7 +11,7 @@
 // isolated here as a small, testable interface.
 //
 // The dispatch KERNELS (RkendallPCP_Dispatch_*) and their __device__ helpers
-// stay in metrics/kendall.cu (rdc constraint, ADR-0002). pcp_dispatch_cfg only
+// stay in metrics/kendall.cu (rdc constraint). pcp_dispatch_cfg only
 // takes the kernels' host address (cudaFuncGetAttributes) to clamp W to the
 // device register budget — a host reference resolved at host link, NOT a device
 // call, so no -rdc=true.

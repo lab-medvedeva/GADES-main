@@ -70,7 +70,7 @@ static void pc_drive_cpu_sparse_euclidean_diff(int* a_index, int* a_positions,
 
 //=========================================
 
-// parallel_for_with_id / get_num_threads / parallel_for_cols moved to pc_runtime_cpu (ADR-0002).
+// parallel_for_with_id / get_num_threads / parallel_for_cols moved to pc_runtime_cpu.
 
 //Naive Implementation of Euclidean_distance_matrix (BruteForce)
 extern "C" void matrix_Euclidean_distance_same_block_cpu(double * a, double * b, double * c, int * n, int * m, int * m_b) {

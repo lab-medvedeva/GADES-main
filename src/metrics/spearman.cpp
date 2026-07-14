@@ -18,9 +18,9 @@
 
 // ==================== Spearman ====================
 
-// rank_columns_cpu moved to pc_linalg_cpu (ADR-0002).
+// rank_columns_cpu moved to pc_linalg_cpu.
 
-// csr_to_ranked_dense_cpu moved to pc_linalg_cpu (ADR-0002).
+// csr_to_ranked_dense_cpu moved to pc_linalg_cpu.
 
 extern "C" void matrix_Spearman_distance_same_block_cpu(
     double* a, double* b, double* c, int* n, int* m, int* m_b

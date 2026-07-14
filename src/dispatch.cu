@@ -25,7 +25,7 @@
 
 // Pinned host-buffer helpers + persistent pinned staging pool moved to
 // pc_runtime (pc_pinned_f/pc_host_d2f/pc_host_f2d/pc_rt_log,
-// pc_pin/pc_d2f_pin/pc_d2f_pin_b/pc_srcblk_pin, g_pin_in/out/in_b) — ADR-0002.
+// pc_pin/pc_d2f_pin/pc_d2f_pin_b/pc_srcblk_pin, g_pin_in/out/in_b).
 static void pc_call_euclidean_same(const double* da, double* dc, int n, int m) {
     bool L = pc_rt_log(); double t0=L?omp_get_wtime():0;
     size_t sz = (size_t)n * m, osz = (size_t)m * m;
@@ -348,7 +348,7 @@ extern "C" SEXP C_dense_block_batched(SEXP a, SEXP n_, SEXP m_, SEXP metric_, SE
 }
 
 
-// PCCsc_to_dense_kernel and PCCsc_block_to_dense_kernel moved to pc_linalg (ADR-0002).
+// PCCsc_to_dense_kernel and PCCsc_block_to_dense_kernel moved to pc_linalg.
 
 // euclidean/cosine/pearson on a sparse CSC matrix: densify on the GPU, then take
 // the fast dense cuBLAS path (pinned download + OpenMP, same code as C_dense_block).

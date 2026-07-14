@@ -1,6 +1,6 @@
 // ============================================================================
 // pcp_dispatch — definitions of the sparse-Kendall launch-config policy
-// (see pcp_dispatch.cuh). Moved verbatim out of metrics/kendall.cu (ADR-0003).
+// (see pcp_dispatch.cuh). Moved verbatim out of metrics/kendall.cu.
 // ============================================================================
 
 #include "pcp_dispatch.cuh"

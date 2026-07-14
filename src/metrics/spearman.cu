@@ -280,7 +280,7 @@ extern "C" void matrix_Spearman_sparse_per_cell_pair_distance_different_blocks(
 // Rank columns and center (subtract mean rank = (n+1)/2) so that
 // the existing Cosine kernels (which compute cosine-style correlation)
 // produce the correct Pearson-on-ranks = Spearman result.
-// rank_columns and csr_to_ranked_dense (Spearman rank transforms) moved to pc_linalg (ADR-0002).
+// rank_columns and csr_to_ranked_dense (Spearman rank transforms) moved to pc_linalg.
 
 extern "C" void matrix_Spearman_distance_same_block(double* a, double* b, double* c, int* n, int* m, int* m_b) {
     int array_size = *n * *m;

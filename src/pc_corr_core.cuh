@@ -4,7 +4,7 @@
 #include <Rinternals.h>
 #include <cuda_runtime.h>
 
-// Shared cross-TU declarations (ADR-0002, candidate 2). Host drivers +
+// Shared cross-TU declarations. Host drivers +
 // kernels launched from more than one metric TU. Keep external linkage.
 void pc_cosine_same_block_device(const float* d_A, int n, int m, float* d_D);
 void pc_cosine_different_blocks_device(const float* d_A, const float* d_B, int n, int m, int m_b, float* d_D);

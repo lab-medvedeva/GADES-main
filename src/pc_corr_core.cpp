@@ -26,7 +26,7 @@
 // See prototype_cublas/ for the validation harness.
 
 // pc_col_sqnorms / pc_center_columns moved to pc_linalg_cpu;
-// pc_pick_blas_threads / PCBlasThreadsGuard moved to pc_runtime_cpu (ADR-0002).
+// pc_pick_blas_threads / PCBlasThreadsGuard moved to pc_runtime_cpu.
 
 // Fallback: naive OMP triple loop — used for tiny problems where BLAS
 // thread-pool overhead dominates. Output col-major m x m_b.
@@ -64,7 +64,7 @@ void pc_fallback_cosine_same(const float* A, int n, int m, float* D,
 }
 
 
-// pc_use_blas moved to pc_runtime_cpu (ADR-0002).
+// pc_use_blas moved to pc_runtime_cpu.
 
 // Core: cosine same_block, output col-major m x m.
 void pc_cosine_same_block_cpu(const float* A, int n, int m, float* D) {
@@ -134,7 +134,7 @@ void pc_drive_cpu_cosine_same(double* a, double* c, int n, int m,
 }
 
 
-// pc_col_sq moved to pc_linalg_cpu (ADR-0002).
+// pc_col_sq moved to pc_linalg_cpu.
 
 void pc_euclidean_same_block_cpu(const float* A, int n, int m,
                                         float* D) {
