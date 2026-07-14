@@ -1,23 +1,14 @@
-library(R.utils)
-
-if(!is.loaded("matrix_Kendall_distance_same_block")) {
-        library.dynam('mtrx', package = 'HobotnicaGPU', lib.loc = NULL)
-}
-if(!is.loaded("matrix_Kendall_distance_same_block_cpu")) {
-       library.dynam('mtrx_cpu', package = 'HobotnicaGPU', lib.loc = NULL)
-    }
-
-#.C("check_gpu", PACKAGE = "mtrx")
-#dyn.load("./lib/mtrx.so")
-#dyn.load("./lib/mtrx_cpu.so")
-#source("./R/mtrx.R")
-
-library(amap)
-library(HobotnicaGPU)
-library(Matrix)
-library("factoextra")
-library(glue)
-library(profmem)
+# --- Server load: no installed HobotnicaGPU package; dyn.load the prebuilt .so
+# --- + source the R interface (same as validate.R / run_real.R). Competitor and
+# --- profiling libraries are loaded only if present, so GADES-only runs work
+# --- without amap/factoextra/R.utils/profmem installed.
+.GADES <- "/8tbsata/Science/BioInfo/Hobotnica/Hobotnica-GPU"
+if (!is.loaded("matrix_Kendall_distance_same_block"))     dyn.load(file.path(.GADES, "build/mtrx.so"))
+if (!is.loaded("matrix_Kendall_distance_same_block_cpu")) dyn.load(file.path(.GADES, "build/mtrx_cpu.so"))
+suppressMessages({library(Matrix); library(glue)})
+source(file.path(.GADES, "R/mtrx.R"))
+for (.p in c("R.utils","amap","factoextra","profmem"))
+  suppressWarnings(suppressMessages(if (requireNamespace(.p, quietly=TRUE)) library(.p, character.only=TRUE)))
 args = commandArgs(trailingOnly=TRUE)
 datain = args[1]
 method = args[2]
@@ -32,6 +23,16 @@ filename = "out"
 
 profile = as.logical(args[8])
 
+transpose_data = TRUE
+if (length(args) >= 9) {
+    transpose_data = as.logical(args[9])
+}
+
+sparse_layout = "default"
+if (length(args) >= 10) {
+    sparse_layout = args[10]
+}
+
 if (profile) {
     library(profmem)
 }
@@ -40,14 +41,19 @@ if (profile) {
 print('Reading table')
 print(glue("{output}_{method}_{metric}.csv"))
 print(sparse)
+print(glue("transpose={transpose_data}"))
 
 if (sparse) {
-    data <- t(readMM(datain))
+    data <- readMM(datain)
+    if (transpose_data) data <- t(data)
 } else {
     if (grepl("\\.mtx$", datain, ignore.case = TRUE)) {
-        data <- as.matrix(t(readMM(datain)))
+        data <- readMM(datain)
+        if (transpose_data) data <- t(data)
+        data <- as.matrix(data)
     } else {
-        data <- t(as.matrix(read.table(datain, header=T, row.names = 1, sep=",")))
+        data <- as.matrix(read.table(datain, header=T, row.names = 1, sep=","))
+        if (transpose_data) data <- t(data)
     }
 }
 
@@ -83,12 +89,12 @@ for (i in 1:times) {
         print('Where')
         print(batch_size)
         print(dim(data))
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size , metric = metric,type="gpu",sparse=sparse, filename=filename)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size , metric = metric,type="gpu",sparse=sparse, filename=filename, sparse_layout=sparse_layout, memory_limit_gb = as.numeric(Sys.getenv("MEM_LIMIT_GB", "12")))
         print(dim(distMatrix_mtrx))
     } else if (method == 'CPU') {
         print(metric)
         #library.dynam()
-        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size, metric = metric, type="cpu", sparse=sparse, filename=filename)
+        distMatrix_mtrx <- mtrx_distance(data, batch_size = batch_size, metric = metric, type="cpu", sparse=sparse, filename=filename, sparse_layout=sparse_layout, memory_limit_gb = as.numeric(Sys.getenv("MEM_LIMIT_GB", "12")))
         print(dim(distMatrix_mtrx))
     } else if (method == 'amap') {
         

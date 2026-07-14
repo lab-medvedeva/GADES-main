@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python/**"
+      - "src/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "python/**"
+      - "src/**"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  # ── CPU-only build + tests (no GPU needed) ──────────────────────────────
+  cpu-tests:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev cmake ninja-build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (CPU only)
+        working-directory: python
+        run: |
+          pip install --upgrade pip
+          pip install scikit-build-core cmake ninja
+          pip install ".[test]"
+
+      - name: Run CPU tests
+        working-directory: python
+        run: pytest tests/ -v -m "not gpu" --tb=short
+
+  # ── GPU build + tests (CUDA runner) ─────────────────────────────────────
+  gpu-tests:
+    runs-on: ubuntu-22.04
+    container:
+      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3 python3-pip python3-venv \
+                             libopenblas-dev cmake ninja-build git
+
+      - name: Install package (GPU + CPU)
+        working-directory: python
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install scikit-build-core cmake ninja
+          CUDA_ARCHITECTURES="70;75;80;86;89;90" python3 -m pip install ".[test]"
+
+      - name: Run all tests
+        working-directory: python
+        run: python3 -m pytest tests/ -v --tb=short
+
+  # ── Lint ────────────────────────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check python/gades/ python/tests/
+
+      - name: Ruff format check
+        run: ruff format --check python/gades/ python/tests/

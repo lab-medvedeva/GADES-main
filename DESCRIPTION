@@ -1,9 +1,19 @@
-Package: HobotnicaGPU
+Package: GADES
 Version: 0.1.0
-Date: 2022-12-15
+Date: 2026-07-10
 Title: Hobotnica-GPU Lab-Medvedeva
-Description: Parallel distance matrices for single-cell RNA sequence data.
+Description: Parallel pairwise distance matrices for single-cell RNA sequencing
+    data on GPU (CUDA) and CPU. Supports dense and sparse inputs and six metrics
+    (euclidean, cosine, pearson, spearman, kendall, manhattan).
 Author: Ausaaf Nabi <nabi.a@phystech.edu>, Akhatyamov Pavel <akhtyamovpavel@gmail.com>
 Maintainer: Ausaaf Nabi <nabi.a@phystech.edu>
-License: CC 3.0 
+License: CC 3.0
+Imports:
+    Matrix,
+    glue,
+    methods
+Suggests:
+    hdf5r
+SystemRequirements: OpenBLAS; CUDA toolkit + cuBLAS (optional, for the GPU
+    backend; the CPU backend builds and runs without CUDA); CMake (>= 3.10)
 RoxygenNote: 7.2.2
