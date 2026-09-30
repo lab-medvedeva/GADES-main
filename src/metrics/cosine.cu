@@ -30,7 +30,7 @@ void pc_drive_sparse_cosine_same(int* a_index, int* a_positions,
     if (center) pc_center_columns_device(d_A, n, m);
 
     float* d_D;
-    cudaMalloc(&d_D, (size_t)m * m * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m * sizeof(float));
     pc_cosine_same_block_device(d_A, n, m, d_D);
 
     std::vector<float> out((size_t)m * m);
@@ -57,7 +57,7 @@ void pc_drive_sparse_cosine_diff(int* a_index, int* a_positions,
     }
 
     float* d_D;
-    cudaMalloc(&d_D, (size_t)m * m_b * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m_b * sizeof(float));
     pc_cosine_different_blocks_device(d_A, d_B, n, m, m_b, d_D);
 
     std::vector<float> out((size_t)m * m_b);
@@ -393,12 +393,12 @@ extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_same_block(
   for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
 
   int* d_i; int* d_p; float* d_x; float* d_norms; float* d_res; double* d_out;
-  cudaMalloc(&d_i, nnz * sizeof(int));
-  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_x, nnz * sizeof(float));
-  cudaMalloc(&d_norms, n_cells * sizeof(float));
-  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
-  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_i, nnz * sizeof(int));
+  gpuMallocChk(&d_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_x, nnz * sizeof(float));
+  gpuMallocChk(&d_norms, n_cells * sizeof(float));
+  gpuMallocChk(&d_res, n_cells * n_cells * sizeof(float));
+  gpuMallocChk(&d_out, n_cells * n_cells * sizeof(double));
 
   cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -441,15 +441,15 @@ extern "C" void matrix_Cosine_sparse_per_cell_pair_distance_different_blocks(
   int* d_ai; int* d_ap; float* d_ax; float* d_an;
   int* d_bi; int* d_bp; float* d_bx; float* d_bn;
   float* d_res;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int));
-  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
-  cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_an, n_cells_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int));
-  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
-  cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_bn, n_cells_b * sizeof(float));
-  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int));
+  gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int));
+  gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_an, n_cells_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int));
+  gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int));
+  gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_bn, n_cells_b * sizeof(float));
+  gpuMallocChk(&d_res, n_cells_a * n_cells_b * sizeof(float));
 
   cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);

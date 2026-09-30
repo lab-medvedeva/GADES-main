@@ -20,6 +20,7 @@ Quick start::
 """
 
 from .distance import distance, pairwise_distance, METRICS
+from .h5ad import H5adReader, distance_from_h5ad, h5ad_info, read_obs
 from ._backend import backend as _backend
 
 __version__ = "2.0.0b1"
@@ -37,5 +38,9 @@ __all__ = [
     "pairwise_distance",
     "has_gpu",
     "SUPPORTED_METRICS",
+    "H5adReader",
+    "h5ad_info",
+    "read_obs",
+    "distance_from_h5ad",
     "__version__",
 ]

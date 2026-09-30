@@ -337,6 +337,38 @@ process_pair_per_cell_pair <- function(submat_a, submat_b, n_genes, metric, type
   result
 }
 
+#' Run a single dense kernel call on two pre-sliced submatrices.
+#'
+#' Densifies only the two blocks (genes x cells each) and calls the same dense
+#' .C driver that `process_batch()` uses for an in-memory matrix, so the h5ad
+#' streaming path can run the dense kernels without the full dense matrix.
+#' Returns a dense `m_a x m_b` distance block.
+#'
+#' @keywords internal
+process_pair_dense <- function(submat_a, submat_b, n_genes, metric, type) {
+  m_a <- ncol(submat_a)
+  m_b <- ncol(submat_b)
+  same_block <- identical(submat_a, submat_b)
+  block_type <- if (same_block) "same_block" else "different_blocks"
+  fn_name <- .mtrx_fn_name(metric, block_type, "", cpu = type == "cpu")
+  pkg <- if (type == "gpu") "mtrx" else "mtrx_cpu"
+  dense_a <- as.matrix(submat_a)
+  dense_b <- if (same_block) dense_a else as.matrix(submat_b)
+
+  result <- .C(
+    fn_name,
+    matrix_a    = as.double(dense_a),
+    matrix_b    = as.double(dense_b),
+    dist_matrix = double(m_a * m_b),
+    rows        = as.integer(n_genes),
+    cols_a      = as.integer(m_a),
+    cols_b      = as.integer(m_b),
+    PACKAGE = pkg
+  )$dist_matrix
+  dim(result) <- c(m_a, m_b)
+  result
+}
+
 #' Streaming distance from h5ad with sparse HDF5 output.
 #'
 #' Internal helper called by `mtrx_distance()` when `a` is a path to .h5ad.
@@ -345,25 +377,38 @@ process_pair_per_cell_pair <- function(submat_a, submat_b, n_genes, metric, type
 #' Neither full input nor full output matrix lives in RAM. Supports resume via
 #' checkpoint attrs in the output file. See docs/adr/0001 and CONTEXT.md.
 #'
+#' With `write = FALSE` the same pipeline runs without the output file: each
+#' block is computed and discarded, and only per-batch timings are printed.
+#' This is the streaming mode used to benchmark huge inputs whose distance
+#' matrix does not fit on disk.
+#'
+#' With `sparse = FALSE` each pair of batches is densified on its own and
+#' computed by the dense kernels (`process_pair_dense()`); memory grows with
+#' the batch size and the number of features, not with the number of cells.
+#'
 #' @keywords internal
-.mtrx_distance_h5ad <- function(h5ad_path, output_path, batch_size, metric, type) {
-  if (!nzchar(output_path)) {
-    stop("mtrx_distance(h5ad) requires `filename` for sparse HDF5 output")
+.mtrx_distance_h5ad <- function(h5ad_path, output_path, batch_size, metric, type, write = TRUE, sparse = TRUE) {
+  if (write && !nzchar(output_path)) {
+    stop("mtrx_distance(h5ad) requires `filename` for sparse HDF5 output (or write = FALSE to stream without storing)")
   }
   h <- h5ad_open(h5ad_path)
   on.exit(h5ad_close(h), add = TRUE)
   m <- h$n_cells
   n_genes <- h$n_genes
-  obs_names <- h5ad_obs_names(h)
 
-  w <- sparse_writer_open(output_path, m, obs_names, metric)
-  on.exit(sparse_writer_close(w), add = TRUE, after = FALSE)
+  chk_first  <- -1L
+  chk_second <- -1L
+  if (write) {
+    obs_names <- h5ad_obs_names(h)
+    w <- sparse_writer_open(output_path, m, obs_names, metric)
+    on.exit(sparse_writer_close(w), add = TRUE, after = FALSE)
 
-  chk <- sparse_writer_get_checkpoint(w)
-  chk_first  <- chk[1]
-  chk_second <- chk[2]
-  if (chk_first >= 0) {
-    print(glue("resuming from checkpoint: last=({chk_first}, {chk_second})"))
+    chk <- sparse_writer_get_checkpoint(w)
+    chk_first  <- chk[1]
+    chk_second <- chk[2]
+    if (chk_first >= 0) {
+      print(glue("resuming from checkpoint: last=({chk_first}, {chk_second})"))
+    }
   }
 
   for (first_idx in seq(0L, m - 1L, by = batch_size)) {
@@ -383,7 +428,18 @@ process_pair_per_cell_pair <- function(submat_a, submat_b, n_genes, metric, type
                   else h5ad_slice_cells(h, second_idx, second_end)
       t1 <- as.numeric(Sys.time()) * 1e6
 
-      block <- process_pair_per_cell_pair(submat_a, submat_b, n_genes, metric, type)
+      if (sparse) {
+        block <- process_pair_per_cell_pair(submat_a, submat_b, n_genes, metric, type)
+      } else {
+        block <- process_pair_dense(submat_a, submat_b, n_genes, metric, type)
+      }
+      if (!write) {
+        t2 <- as.numeric(Sys.time()) * 1e6
+        print(glue("batch ({first_idx}, {second_idx}) ",
+                   "read={round((t1-t0)/1000)}ms ",
+                   "kernel={round((t2-t1)/1000)}ms"))
+        next
+      }
       n_kept <- sparse_writer_append_block(w, block, first_idx, second_idx)
       sparse_writer_set_checkpoint(w, first_idx, second_idx)
       t2 <- as.numeric(Sys.time()) * 1e6
@@ -402,6 +458,10 @@ process_pair_per_cell_pair <- function(submat_a, submat_b, n_genes, metric, type
 #' @param a Count matrix (in-memory `Matrix`) or character path to `.h5ad`
 #'   file. For h5ad mode, `filename` is required and becomes the output
 #'   sparse HDF5 path; `sparse` and `sparse_layout` are forced (per_cell_pair).
+#'   Passing `write = FALSE` explicitly in h5ad mode streams the distances
+#'   batch by batch without storing them, and `filename` is not needed.
+#'   Passing `sparse = FALSE` explicitly in h5ad mode densifies each pair of
+#'   batches and uses the dense kernels; without it h5ad mode stays sparse.
 #' @param filename CSV file (or HDF5 output path for h5ad mode).
 #' @param batch_size int.
 #' @param metric string for matric selection.
@@ -541,7 +601,15 @@ mtrx_distance <- function(a, filename = "", batch_size = 1000, metric = "kendall
 {
   # h5ad streaming path — neither full input nor full output in RAM
   if (is.character(a) && length(a) == 1 && endsWith(a, ".h5ad")) {
-    return(.mtrx_distance_h5ad(a, filename, batch_size, metric, type))
+    # By default the h5ad mode writes sparse HDF5 output to `filename`;
+    # an explicit write = FALSE streams the distances without storing them.
+    write_output <- missing(write) || isTRUE(write)
+    # Likewise the h5ad mode stays sparse (per_cell_pair) unless sparse = FALSE
+    # is passed explicitly: the default sparse = F of this function must not
+    # silently switch existing callers to the dense kernels.
+    sparse_input <- missing(sparse) || isTRUE(sparse)
+    return(.mtrx_distance_h5ad(a, filename, batch_size, metric, type,
+                               write = write_output, sparse = sparse_input))
   }
 
   # Placement policy: attempt the .Call fast paths; fall through to the block loop.

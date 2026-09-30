@@ -18,6 +18,8 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstdio>
+#include <vector>
+#include <algorithm>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <R.h>
@@ -36,6 +38,36 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
       if (abort) exit(code);
    }
 }
+
+// Checked device allocation.
+//
+// An unchecked cudaMalloc leaves the pointer unusable and the failure silent,
+// so the first kernel to touch it dies with "an illegal memory access was
+// encountered" pointing at the launch, not at the allocation that actually
+// failed. That misdirects diagnosis badly: the usual cause is simply that the
+// device is full. Report what was requested and what was available instead.
+#define gpuMallocChk(ptr, bytes) \
+    pcCudaMalloc((void**)(ptr), (size_t)(bytes), #ptr, __FILE__, __LINE__)
+
+inline void pcCudaMalloc(void** ptr, size_t bytes, const char* what,
+                         const char* file, int line, bool abort=true)
+{
+   cudaError_t code = cudaMalloc(ptr, bytes);
+   if (code != cudaSuccess)
+   {
+      size_t free_bytes = 0, total_bytes = 0;
+      cudaMemGetInfo(&free_bytes, &total_bytes);
+      fprintf(stderr,
+              "GPUalloc: %s\n"
+              "  requested %.2f GiB for %s at %s:%d\n"
+              "  device has %.2f GiB free of %.2f GiB\n",
+              cudaGetErrorString(code), bytes / 1073741824.0, what, file, line,
+              free_bytes / 1073741824.0, total_bytes / 1073741824.0);
+      if (abort) exit(code);
+   }
+}
+
+#include "pc_csc.h"
 
 // ---- cuBLAS handles (lazy-init singletons; DEFINED in pc_runtime.cu) --------
 //
@@ -80,7 +112,7 @@ struct PcKernelTimer {
 // pc_pinned_f/pc_host_d2f buffer with cudaFreeHost.
 inline float* pc_pinned_f(size_t sz) {
     float* p = nullptr;
-    cudaMallocHost((void**)&p, sz * sizeof(float));
+    gpuErrchk(cudaMallocHost((void**)&p, sz * sizeof(float)));
     return p;
 }
 inline float* pc_host_d2f(const double* src, size_t sz) {

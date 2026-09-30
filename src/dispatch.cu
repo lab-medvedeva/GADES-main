@@ -32,8 +32,8 @@ static void pc_call_euclidean_same(const double* da, double* dc, int n, int m) {
     float* h = pc_d2f_pin(da, sz);
     double t1=L?omp_get_wtime():0;
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, h, sz * sizeof(float), cudaMemcpyHostToDevice);
     if(L) cudaDeviceSynchronize(); double t2=L?omp_get_wtime():0;
     pc_euclidean_same_block_device(d_A, n, m, d_D);
@@ -56,9 +56,9 @@ static void pc_call_euclidean_diff(const double* da, const double* db,
     float* hA = pc_host_d2f(da, szA);
     float* hB = pc_host_d2f(db, szB);
     float *d_A, *d_B, *d_D;
-    cudaMalloc(&d_A, szA * sizeof(float));
-    cudaMalloc(&d_B, szB * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, szA * sizeof(float));
+    gpuMallocChk(&d_B, szB * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, hA, szA * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, hB, szB * sizeof(float), cudaMemcpyHostToDevice);
     cudaFreeHost(hA); cudaFreeHost(hB);
@@ -77,8 +77,8 @@ static void pc_call_cosine_same(const double* da, double* dc, int n, int m,
     float* h = pc_d2f_pin(da, sz);
     double t1=L?omp_get_wtime():0;
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, h, sz * sizeof(float), cudaMemcpyHostToDevice);
     if(L) cudaDeviceSynchronize(); double t2=L?omp_get_wtime():0;
     if (center) pc_center_columns_device(d_A, n, m);
@@ -102,9 +102,9 @@ static void pc_call_cosine_diff(const double* da, const double* db, double* dc,
     float* hA = pc_host_d2f(da, szA);
     float* hB = pc_host_d2f(db, szB);
     float *d_A, *d_B, *d_D;
-    cudaMalloc(&d_A, szA * sizeof(float));
-    cudaMalloc(&d_B, szB * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, szA * sizeof(float));
+    gpuMallocChk(&d_B, szB * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, hA, szA * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, hB, szB * sizeof(float), cudaMemcpyHostToDevice);
     cudaFreeHost(hA); cudaFreeHost(hB);
@@ -168,8 +168,8 @@ static void pc_call_manhattan_same(const double* da, double* dc, int n, int m) {
     size_t sz = (size_t)n * m, osz = (size_t)m * m;
     float* h = pc_host_d2f(da, sz);
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, h, sz * sizeof(float), cudaMemcpyHostToDevice);
     cudaFreeHost(h);
     pc_manhattan_same_block_device(d_A, n, m, d_D);
@@ -187,8 +187,8 @@ static void pc_call_spearman_same(const double* da, double* dc, int n, int m) {
     float* h = pc_host_d2f(da, sz);
     rank_columns(h, n, m);
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, osz * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, osz * sizeof(float));
     cudaMemcpy(d_A, h, sz * sizeof(float), cudaMemcpyHostToDevice);
     cudaFreeHost(h);
     pc_cosine_same_block_device(d_A, n, m, d_D);
@@ -203,8 +203,8 @@ static void pc_call_kendall_same(const double* da, double* dc, int n, int m) {
     size_t sz = (size_t)n * m, osz = (size_t)m * m;
     float* h = pc_host_d2f(da, sz);
     float* d_A; int* d_disc;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_disc, osz * sizeof(int));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_disc, osz * sizeof(int));
     cudaMemcpy(d_A, h, sz * sizeof(float), cudaMemcpyHostToDevice);
     cudaFreeHost(h);
     pc_kendall_same_block_device(d_A, n, m, d_disc);
@@ -287,9 +287,9 @@ extern "C" SEXP C_dense_block_batched(SEXP a, SEXP n_, SEXP m_, SEXP metric_, SE
     bool L = pc_rt_log(); double t0 = L ? omp_get_wtime() : 0;
     // input read directly from the SEXP (double OR integer) -> no R as.double copy
     float *d_Ai, *d_Aj, *d_tile;
-    cudaMalloc(&d_Ai, (size_t)n * batch * sizeof(float));
-    cudaMalloc(&d_Aj, (size_t)n * batch * sizeof(float));
-    cudaMalloc(&d_tile, (size_t)batch * batch * sizeof(float));
+    gpuMallocChk(&d_Ai, (size_t)n * batch * sizeof(float));
+    gpuMallocChk(&d_Aj, (size_t)n * batch * sizeof(float));
+    gpuMallocChk(&d_tile, (size_t)batch * batch * sizeof(float));
     SEXP out = R_NilValue; double* dc = nullptr;
     if (write) { out = PROTECT(allocVector(REALSXP, (R_xlen_t)m * m)); dc = REAL(out); }
 
@@ -359,14 +359,14 @@ static void pc_call_sparse_densify(const int* ai, const int* ap, const double* a
     #pragma omp parallel for schedule(static)
     for (long long k = 0; k < (long long)nnz; ++k) hx[k] = (float)ax[k];
     int *d_i, *d_p; float* d_x;
-    cudaMalloc(&d_i, (size_t)nnz * sizeof(int));
-    cudaMalloc(&d_p, (size_t)(m + 1) * sizeof(int));
-    cudaMalloc(&d_x, (size_t)nnz * sizeof(float));
+    gpuMallocChk(&d_i, (size_t)nnz * sizeof(int));
+    gpuMallocChk(&d_p, (size_t)(m + 1) * sizeof(int));
+    gpuMallocChk(&d_x, (size_t)nnz * sizeof(float));
     cudaMemcpy(d_i, ai, (size_t)nnz * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_p, ap, (size_t)(m + 1) * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_x, hx, (size_t)nnz * sizeof(float), cudaMemcpyHostToDevice);
     float* d_A;
-    cudaMalloc(&d_A, (size_t)n * m * sizeof(float));
+    gpuMallocChk(&d_A, (size_t)n * m * sizeof(float));
     cudaMemset(d_A, 0, (size_t)n * m * sizeof(float));
     int t = 128, b = (m + t - 1) / t;
     PCCsc_to_dense_kernel<<<b, t>>>(d_i, d_p, d_x, n, m, d_A);
@@ -375,7 +375,7 @@ static void pc_call_sparse_densify(const int* ai, const int* ap, const double* a
     double t1=L?omp_get_wtime():0;
     if (metric == 2) pc_center_columns_device(d_A, n, m);   // pearson = centered cosine
     float* d_D;
-    cudaMalloc(&d_D, (size_t)m * m * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m * sizeof(float));
     if (metric == 0) pc_euclidean_same_block_device(d_A, n, m, d_D);
     else             pc_cosine_same_block_device(d_A, n, m, d_D);
     if(L){ cudaDeviceSynchronize(); }
@@ -409,20 +409,22 @@ extern "C" SEXP C_sparse_block_batched(SEXP ai, SEXP ap, SEXP ax, SEXP n_, SEXP 
         return R_NilValue;
 
     const int* aidx = INTEGER(ai); const int* apos = INTEGER(ap); const double* axx = REAL(ax);
+    PcCscView av = pc_csc_canonical(apos, aidx, axx, m, nnz, "C_sparse_block_batched");
+    aidx = av.row_idx; axx = av.values;
     float* hx = pc_pin(&g_pin_in, &g_pin_in_sz, nnz);      // CSC values -> float (persistent pinned)
     #pragma omp parallel for schedule(static)
     for (long long k = 0; k < (long long)nnz; ++k) hx[k] = (float)axx[k];
     int *d_i, *d_p; float *d_x;
-    cudaMalloc(&d_i, (size_t)nnz * sizeof(int));
-    cudaMalloc(&d_p, (size_t)(m + 1) * sizeof(int));
-    cudaMalloc(&d_x, (size_t)nnz * sizeof(float));
+    gpuMallocChk(&d_i, (size_t)nnz * sizeof(int));
+    gpuMallocChk(&d_p, (size_t)(m + 1) * sizeof(int));
+    gpuMallocChk(&d_x, (size_t)nnz * sizeof(float));
     cudaMemcpy(d_i, aidx, (size_t)nnz * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_p, apos, (size_t)(m + 1) * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_x, hx,   (size_t)nnz * sizeof(float), cudaMemcpyHostToDevice);
     float *d_Ai, *d_Aj, *d_tile;
-    cudaMalloc(&d_Ai, (size_t)n * batch * sizeof(float));
-    cudaMalloc(&d_Aj, (size_t)n * batch * sizeof(float));
-    cudaMalloc(&d_tile, (size_t)batch * batch * sizeof(float));
+    gpuMallocChk(&d_Ai, (size_t)n * batch * sizeof(float));
+    gpuMallocChk(&d_Aj, (size_t)n * batch * sizeof(float));
+    gpuMallocChk(&d_tile, (size_t)batch * batch * sizeof(float));
     SEXP out = R_NilValue; double* dc = nullptr;
     if (write) { out = PROTECT(allocVector(REALSXP, (R_xlen_t)m * m)); dc = REAL(out); }
     int tb = 128;
@@ -496,6 +498,9 @@ extern "C" SEXP C_sparse_block(SEXP ai, SEXP ap, SEXP ax, SEXP n_, SEXP m_,
     int* aidx = INTEGER(ai);
     int* apos = INTEGER(ap);
     double* axx = REAL(ax);
+    PcCscView av = pc_csc_canonical(apos, aidx, axx, m, nnz, "C_sparse_block");
+    aidx = const_cast<int*>(av.row_idx);
+    axx = const_cast<double*>(av.values);
     SEXP out = PROTECT(allocVector(REALSXP, (R_xlen_t)m * m));
     double* res = REAL(out);
 

@@ -177,13 +177,13 @@ extern "C" void matrix_Manhattan_distance_same_block(double* a, double * b /* no
 
   float* d_array;
 
-  cudaMalloc(&d_array, array_size * sizeof(float));
+  gpuMallocChk(&d_array, array_size * sizeof(float));
 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
 
   float* d_result;
   float* h_result = new float[(*m) * (*m)];
-  cudaMalloc(&d_result, (*m) * (*m) * sizeof(float));
+  gpuMallocChk(&d_result, (*m) * (*m) * sizeof(float));
   cudaMemset(d_result, 0, (*m) * (*m) * sizeof(float));
   int columns = *m;
   dim3 block_size(16, 16);
@@ -234,8 +234,8 @@ extern "C" void matrix_Manhattan_distance_different_blocks(double* a, double* b,
   float* d_array;
   float* d_array2;
 
-  cudaMalloc(&d_array, array_size * sizeof(float));
-  cudaMalloc(&d_array2, array2_size * sizeof(float));
+  gpuMallocChk(&d_array, array_size * sizeof(float));
+  gpuMallocChk(&d_array2, array2_size * sizeof(float));
 
   cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
@@ -246,7 +246,7 @@ extern "C" void matrix_Manhattan_distance_different_blocks(double* a, double* b,
 
   float* d_result;
   float* h_result = new float[(*m) * (*m_b)];
-  cudaMalloc(&d_result, (*m) * (*m_b) * sizeof(float));
+  gpuMallocChk(&d_result, (*m) * (*m_b) * sizeof(float));
   cudaMemset(d_result, 0, (*m) * (*m_b) * sizeof(float));
 
   Rmanhattan_reg_different_blocks<<<num_blocks, block_size>>>(d_array, d_array2, *n, *m, *m_b, d_result);
@@ -334,10 +334,10 @@ extern "C" void matrix_Manhattan_sparse_distance_same_block(
     float* d_a_values;
     float* d_result;
 
-    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
-    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
-    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
-    cudaMalloc(&d_result, columns * columns * sizeof(float));
+    gpuMallocChk(&d_a_index, num_elements_a_int * sizeof(int));
+    gpuMallocChk(&d_a_positions, (rows + 1) * sizeof(int));
+    gpuMallocChk(&d_a_values, num_elements_a_int * sizeof(float));
+    gpuMallocChk(&d_result, columns * columns * sizeof(float));
 
     cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_a_positions, a_positions, (rows + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -461,13 +461,13 @@ extern "C" void matrix_Manhattan_sparse_distance_different_blocks(
     float* d_result;
 
     gpuErrchk(cudaPeekAtLastError());
-    cudaMalloc(&d_a_index, num_elements_a_int * sizeof(int));
-    cudaMalloc(&d_a_positions, (rows + 1) * sizeof(int));
-    cudaMalloc(&d_a_values, num_elements_a_int * sizeof(float));
-    cudaMalloc(&d_b_index, num_elements_b_int * sizeof(int));
-    cudaMalloc(&d_b_positions, (rows + 1) * sizeof(int));
-    cudaMalloc(&d_b_values, num_elements_b_int * sizeof(float));
-    cudaMalloc(&d_result, columns * columns_b * sizeof(float));
+    gpuMallocChk(&d_a_index, num_elements_a_int * sizeof(int));
+    gpuMallocChk(&d_a_positions, (rows + 1) * sizeof(int));
+    gpuMallocChk(&d_a_values, num_elements_a_int * sizeof(float));
+    gpuMallocChk(&d_b_index, num_elements_b_int * sizeof(int));
+    gpuMallocChk(&d_b_positions, (rows + 1) * sizeof(int));
+    gpuMallocChk(&d_b_values, num_elements_b_int * sizeof(float));
+    gpuMallocChk(&d_result, columns * columns_b * sizeof(float));
     gpuErrchk(cudaPeekAtLastError());
 
     gpuErrchk(cudaMemcpy(d_a_index, a_index, num_elements_a_int * sizeof(int), cudaMemcpyHostToDevice));
@@ -584,11 +584,11 @@ extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_same_block(
   for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
 
   int* d_i; int* d_p; float* d_x; float* d_res; double* d_out;
-  cudaMalloc(&d_i, nnz * sizeof(int));
-  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_x, nnz * sizeof(float));
-  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
-  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_i, nnz * sizeof(int));
+  gpuMallocChk(&d_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_x, nnz * sizeof(float));
+  gpuMallocChk(&d_res, n_cells * n_cells * sizeof(float));
+  gpuMallocChk(&d_out, n_cells * n_cells * sizeof(double));
 
   cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -626,13 +626,13 @@ extern "C" void matrix_Manhattan_sparse_per_cell_pair_distance_different_blocks(
   int* d_ai; int* d_ap; float* d_ax;
   int* d_bi; int* d_bp; float* d_bx;
   float* d_res;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int));
-  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
-  cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int));
-  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
-  cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int));
+  gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int));
+  gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int));
+  gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int));
+  gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_res, n_cells_a * n_cells_b * sizeof(float));
 
   cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);

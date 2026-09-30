@@ -279,7 +279,7 @@ static void dk_run_same(const float* d_array, int N, int M, int* d_disc) {
     long long want = (long long)(((size_t)2 * 1024 * 1024 * 1024) / per);
     if (want > P) want = P; if (want < 128) want = 128;
     int nb = (int)((want + 127) / 128); if (nb > 65535) nb = 65535;
-    float* d_scratch; cudaMalloc(&d_scratch, (size_t)nb * 128 * 4 * cap * sizeof(float));
+    float* d_scratch; gpuMallocChk(&d_scratch, (size_t)nb * 128 * 4 * cap * sizeof(float));
     Rkendall_dense_pcp_same_block<<<nb, 128>>>((float*)d_array, N, M, cap, d_scratch, d_disc);
     cudaDeviceSynchronize(); cudaFree(d_scratch);
   } else {                                               // variant G: warp-cooperative global
@@ -291,7 +291,7 @@ static void dk_run_same(const float* d_array, int N, int M, int* d_disc) {
     long long cover = (P + W - 1) / W;
     long long blocks = want_blocks < cover ? want_blocks : cover;
     if (blocks > 65535) blocks = 65535; if (blocks < 1) blocks = 1;
-    float* d_scratch; cudaMalloc(&d_scratch, (size_t)blocks * W * 4 * cap * sizeof(float));
+    float* d_scratch; gpuMallocChk(&d_scratch, (size_t)blocks * W * 4 * cap * sizeof(float));
     dim3 threads(32, W);
     Rkendall_dense_warpG_same_block<<<(int)blocks, threads>>>((float*)d_array, N, M, cap, d_scratch, d_disc);
     cudaDeviceSynchronize();
@@ -323,7 +323,7 @@ static void dk_run_diff(const float* dA, const float* dB, int N, int M, int MB, 
     long long cover = (P + W - 1) / W;
     long long blocks = want_blocks < cover ? want_blocks : cover;
     if (blocks > 65535) blocks = 65535; if (blocks < 1) blocks = 1;
-    float* d_scratch; cudaMalloc(&d_scratch, (size_t)blocks * W * 4 * cap * sizeof(float));
+    float* d_scratch; gpuMallocChk(&d_scratch, (size_t)blocks * W * 4 * cap * sizeof(float));
     dim3 threads(32, W);
     Rkendall_dense_warpG_different_blocks<<<(int)blocks, threads>>>((float*)dA, (float*)dB, N, M, MB, cap, d_scratch, d_disc);
     cudaDeviceSynchronize();
@@ -397,8 +397,8 @@ extern "C" void matrix_Kendall_distance_same_block(double* a, double * b /* not 
   for (size_t i = 0; i < asz; ++i) af[i] = (float)a[i];
 
   float* d_array; int* d_disc;
-  cudaMalloc(&d_array, asz * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)M * M * sizeof(int));
+  gpuMallocChk(&d_array, asz * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)M * M * sizeof(int));
   cudaMemcpy(d_array, af.data(), asz * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemset(d_disc, 0, (size_t)M * M * sizeof(int));
 
@@ -436,9 +436,9 @@ extern "C" void matrix_Kendall_distance_different_blocks(double* a, double* b, d
   for (size_t i = 0; i < (size_t)N * MB; ++i) bf[i] = (float)b[i];
 
   float* dA; float* dB; int* d_disc;
-  cudaMalloc(&dA, (size_t)N * M  * sizeof(float));
-  cudaMalloc(&dB, (size_t)N * MB * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)M * MB * sizeof(int));
+  gpuMallocChk(&dA, (size_t)N * M  * sizeof(float));
+  gpuMallocChk(&dB, (size_t)N * MB * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)M * MB * sizeof(int));
   cudaMemcpy(dA, af.data(), (size_t)N * M  * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(dB, bf.data(), (size_t)N * MB * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemset(d_disc, 0, (size_t)M * MB * sizeof(int));
@@ -1541,11 +1541,11 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_a_distance_same_block(
   int cap = 2 * pcp_max_col_nnz(csc_p_in, n_cells); if (cap < 1) cap = 1;
 
   int *d_csc_i, *d_csc_p, *d_discordant; float *d_csc_x, *d_scratch; double* d_result;
-  cudaMalloc(&d_csc_i, nnz * sizeof(int));
-  cudaMalloc(&d_csc_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_csc_x, nnz * sizeof(float));
-  cudaMalloc(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
-  cudaMalloc(&d_result, (size_t)n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_csc_i, nnz * sizeof(int));
+  gpuMallocChk(&d_csc_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_csc_x, nnz * sizeof(float));
+  gpuMallocChk(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
+  gpuMallocChk(&d_result, (size_t)n_cells * n_cells * sizeof(double));
   cudaMemcpy(d_csc_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
@@ -1553,7 +1553,7 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_a_distance_same_block(
 
   int nblocks, nthreads_total;
   pcp_grid_for_scratch((long long)n_cells * n_cells, cap, &nblocks, &nthreads_total);
-  cudaMalloc(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
+  gpuMallocChk(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
 
   RkendallPCP_A_same_block<<<nblocks, 128>>>(d_csc_p, d_csc_i, d_csc_x, n_genes, n_cells, cap, d_scratch, d_discordant);
   gpuErrchk(cudaPeekAtLastError());
@@ -1582,9 +1582,9 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_a_distance_different_blocks(
   if (cap < 1) cap = 1;
 
   int *d_ai, *d_ap, *d_bi, *d_bp, *d_disc; float *d_ax, *d_bx, *d_scratch;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int)); cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int)); cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int)); cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int)); cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int)); gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int)); gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int)); gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int)); gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
   cudaMemcpy(d_ai, a_csc_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_csc_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ax, ax.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
@@ -1594,7 +1594,7 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_a_distance_different_blocks(
 
   int nblocks, nthreads_total;
   pcp_grid_for_scratch((long long)n_cells_a * n_cells_b, cap, &nblocks, &nthreads_total);
-  cudaMalloc(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
+  gpuMallocChk(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
 
   RkendallPCP_A_different_blocks<<<nblocks, 128>>>(d_ap, d_ai, d_ax, d_bp, d_bi, d_bx,
       n_genes, n_cells_a, n_cells_b, cap, d_scratch, d_disc);
@@ -1623,11 +1623,11 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_hybrid_distance_same_block(
   int cap = 2 * pcp_max_col_nnz(csc_p_in, n_cells); if (cap < 1) cap = 1;
 
   int *d_csc_i, *d_csc_p, *d_discordant; float *d_csc_x, *d_scratch; double* d_result;
-  cudaMalloc(&d_csc_i, nnz * sizeof(int));
-  cudaMalloc(&d_csc_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_csc_x, nnz * sizeof(float));
-  cudaMalloc(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
-  cudaMalloc(&d_result, (size_t)n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_csc_i, nnz * sizeof(int));
+  gpuMallocChk(&d_csc_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_csc_x, nnz * sizeof(float));
+  gpuMallocChk(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
+  gpuMallocChk(&d_result, (size_t)n_cells * n_cells * sizeof(double));
   cudaMemcpy(d_csc_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
@@ -1635,7 +1635,7 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_hybrid_distance_same_block(
 
   int nblocks, nthreads_total;
   pcp_grid_for_scratch((long long)n_cells * n_cells, cap, &nblocks, &nthreads_total);
-  cudaMalloc(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
+  gpuMallocChk(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
 
   RkendallPCP_Hybrid_same_block<<<nblocks, 128>>>(d_csc_p, d_csc_i, d_csc_x, n_genes, n_cells,
       cap, PCP_HYBRID_THRESHOLD, d_scratch, d_discordant);
@@ -1665,9 +1665,9 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_hybrid_distance_different_bl
   if (cap < 1) cap = 1;
 
   int *d_ai, *d_ap, *d_bi, *d_bp, *d_disc; float *d_ax, *d_bx, *d_scratch;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int)); cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int)); cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int)); cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int)); cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int)); gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int)); gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int)); gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int)); gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
   cudaMemcpy(d_ai, a_csc_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_csc_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ax, ax.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
@@ -1677,7 +1677,7 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_hybrid_distance_different_bl
 
   int nblocks, nthreads_total;
   pcp_grid_for_scratch((long long)n_cells_a * n_cells_b, cap, &nblocks, &nthreads_total);
-  cudaMalloc(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
+  gpuMallocChk(&d_scratch, (size_t)nthreads_total * 4 * cap * sizeof(float));
 
   RkendallPCP_Hybrid_different_blocks<<<nblocks, 128>>>(d_ap, d_ai, d_ax, d_bp, d_bi, d_bx,
       n_genes, n_cells_a, n_cells_b, cap, PCP_HYBRID_THRESHOLD, d_scratch, d_disc);
@@ -1708,11 +1708,11 @@ static void pcp_B_same_block_impl(
   int cap = 2 * pcp_max_col_nnz(csc_p_in, n_cells); if (cap < 1) cap = 1;
 
   int *d_csc_i, *d_csc_p, *d_discordant; float *d_csc_x; double* d_result;
-  cudaMalloc(&d_csc_i, nnz * sizeof(int));
-  cudaMalloc(&d_csc_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_csc_x, nnz * sizeof(float));
-  cudaMalloc(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
-  cudaMalloc(&d_result, (size_t)n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_csc_i, nnz * sizeof(int));
+  gpuMallocChk(&d_csc_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_csc_x, nnz * sizeof(float));
+  gpuMallocChk(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
+  gpuMallocChk(&d_result, (size_t)n_cells * n_cells * sizeof(double));
   cudaMemcpy(d_csc_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
@@ -1766,9 +1766,9 @@ static void pcp_B_diff_impl(
   if (cap < 1) cap = 1;
 
   int *d_ai, *d_ap, *d_bi, *d_bp, *d_disc; float *d_ax, *d_bx;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int)); cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int)); cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int)); cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int)); cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int)); gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int)); gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int)); gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int)); gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
   cudaMemcpy(d_ai, a_csc_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_csc_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ax, ax.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
@@ -1837,11 +1837,11 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_dispatch_distance_same_block
   PcpDispatchCfg cfg = pcp_dispatch_cfg(cap_global);
 
   int *d_csc_i, *d_csc_p, *d_discordant; float *d_csc_x; double* d_result;
-  cudaMalloc(&d_csc_i, nnz * sizeof(int));
-  cudaMalloc(&d_csc_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_csc_x, nnz * sizeof(float));
-  cudaMalloc(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
-  cudaMalloc(&d_result, (size_t)n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_csc_i, nnz * sizeof(int));
+  gpuMallocChk(&d_csc_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_csc_x, nnz * sizeof(float));
+  gpuMallocChk(&d_discordant, (size_t)n_cells * n_cells * sizeof(int));
+  gpuMallocChk(&d_result, (size_t)n_cells * n_cells * sizeof(double));
   cudaMemcpy(d_csc_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_csc_x, csc_x_f.data(), nnz * sizeof(float), cudaMemcpyHostToDevice);
@@ -1862,14 +1862,14 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_dispatch_distance_same_block
     long long want_blocks = (want_warps + cfg.W - 1) / cfg.W;
     blocks = want_blocks < cover_blocks ? want_blocks : cover_blocks;
     if (blocks > 65535) blocks = 65535; if (blocks < 1) blocks = 1;
-    cudaMalloc(&d_scratch, (size_t)blocks * cfg.W * 4 * cap_global * sizeof(float));
+    gpuMallocChk(&d_scratch, (size_t)blocks * cfg.W * 4 * cap_global * sizeof(float));
   } else {
     blocks = cover_blocks; if (blocks > 65535) blocks = 65535;
   }
 
   bool do_log = getenv("HOBO_PCP_LOG") != nullptr;
   unsigned long long* d_counters = nullptr;
-  if (do_log) { cudaMalloc(&d_counters, 2 * sizeof(unsigned long long));
+  if (do_log) { gpuMallocChk(&d_counters, 2 * sizeof(unsigned long long));
                 cudaMemset(d_counters, 0, 2 * sizeof(unsigned long long)); }
 
   cudaFuncSetAttribute(RkendallPCP_Dispatch_same_block,
@@ -1917,9 +1917,9 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_dispatch_distance_different_
   PcpDispatchCfg cfg = pcp_dispatch_cfg(cap_global);
 
   int *d_ai, *d_ap, *d_bi, *d_bp, *d_disc; float *d_ax, *d_bx;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int)); cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int)); cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int)); cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int)); cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int)); gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int)); gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int)); gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int)); gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_disc, (size_t)n_cells_a * n_cells_b * sizeof(int));
   cudaMemcpy(d_ai, a_csc_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_csc_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ax, ax.data(), nnz_a * sizeof(float), cudaMemcpyHostToDevice);
@@ -1939,14 +1939,14 @@ extern "C" void matrix_Kendall_sparse_per_cell_pair_dispatch_distance_different_
     long long want_blocks = (want_warps + cfg.W - 1) / cfg.W;
     blocks = want_blocks < cover_blocks ? want_blocks : cover_blocks;
     if (blocks > 65535) blocks = 65535; if (blocks < 1) blocks = 1;
-    cudaMalloc(&d_scratch, (size_t)blocks * cfg.W * 4 * cap_global * sizeof(float));
+    gpuMallocChk(&d_scratch, (size_t)blocks * cfg.W * 4 * cap_global * sizeof(float));
   } else {
     blocks = cover_blocks; if (blocks > 65535) blocks = 65535;
   }
 
   bool do_log = getenv("HOBO_PCP_LOG") != nullptr;
   unsigned long long* d_counters = nullptr;
-  if (do_log) { cudaMalloc(&d_counters, 2 * sizeof(unsigned long long));
+  if (do_log) { gpuMallocChk(&d_counters, 2 * sizeof(unsigned long long));
                 cudaMemset(d_counters, 0, 2 * sizeof(unsigned long long)); }
 
   cudaFuncSetAttribute(RkendallPCP_Dispatch_different_blocks,

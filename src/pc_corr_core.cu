@@ -31,7 +31,7 @@ void pc_cosine_same_block_device(const float* d_A, int n, int m,
                                         float* d_D) {
     PcKernelTimer _kt;
     float* d_norms;
-    cudaMalloc(&d_norms, m * sizeof(float));
+    gpuMallocChk(&d_norms, m * sizeof(float));
     int t = 256;
     PCCol_sqnorm_kernel<<<m, t, t * sizeof(float)>>>(d_A, n, m, d_norms);
 
@@ -52,8 +52,8 @@ void pc_cosine_different_blocks_device(const float* d_A,
                                               int m_b, float* d_D) {
     PcKernelTimer _kt;
     float *d_xn, *d_yn;
-    cudaMalloc(&d_xn, m * sizeof(float));
-    cudaMalloc(&d_yn, m_b * sizeof(float));
+    gpuMallocChk(&d_xn, m * sizeof(float));
+    gpuMallocChk(&d_yn, m_b * sizeof(float));
     int t = 256;
     PCCol_sqnorm_kernel<<<m,   t, t * sizeof(float)>>>(d_A, n, m,   d_xn);
     PCCol_sqnorm_kernel<<<m_b, t, t * sizeof(float)>>>(d_B, n, m_b, d_yn);
@@ -116,7 +116,7 @@ void pc_euclidean_same_block_device(const float* d_A, int n, int m,
                                            float* d_D) {
     PcKernelTimer _kt;
     float* d_sq;
-    cudaMalloc(&d_sq, m * sizeof(float));
+    gpuMallocChk(&d_sq, m * sizeof(float));
     int t = 256;
     PCCol_sq_kernel<<<m, t, t * sizeof(float)>>>(d_A, n, m, d_sq);
 
@@ -136,8 +136,8 @@ void pc_euclidean_different_blocks_device(const float* d_A,
                                                  int m, int m_b, float* d_D) {
     PcKernelTimer _kt;
     float *d_sq_a, *d_sq_b;
-    cudaMalloc(&d_sq_a, m   * sizeof(float));
-    cudaMalloc(&d_sq_b, m_b * sizeof(float));
+    gpuMallocChk(&d_sq_a, m   * sizeof(float));
+    gpuMallocChk(&d_sq_b, m_b * sizeof(float));
     int t = 256;
     PCCol_sq_kernel<<<m,   t, t * sizeof(float)>>>(d_A, n, m,   d_sq_a);
     PCCol_sq_kernel<<<m_b, t, t * sizeof(float)>>>(d_B, n, m_b, d_sq_b);
@@ -164,8 +164,8 @@ void pc_drive_cosine_same(double* a, double* c, int n, int m,
     for (size_t i = 0; i < sz; ++i) h[i] = (float)a[i];
 
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, (size_t)m * m * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m * sizeof(float));
     cudaMemcpy(d_A, h.data(), sz * sizeof(float), cudaMemcpyHostToDevice);
     if (center) pc_center_columns_device(d_A, n, m);
     pc_cosine_same_block_device(d_A, n, m, d_D);
@@ -187,9 +187,9 @@ void pc_drive_cosine_diff(double* a, double* b, double* c, int n,
     for (size_t i = 0; i < szB; ++i) hB[i] = (float)b[i];
 
     float *d_A, *d_B, *d_D;
-    cudaMalloc(&d_A, szA * sizeof(float));
-    cudaMalloc(&d_B, szB * sizeof(float));
-    cudaMalloc(&d_D, (size_t)m * m_b * sizeof(float));
+    gpuMallocChk(&d_A, szA * sizeof(float));
+    gpuMallocChk(&d_B, szB * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m_b * sizeof(float));
     cudaMemcpy(d_A, hA.data(), szA * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, hB.data(), szB * sizeof(float), cudaMemcpyHostToDevice);
     if (center) {

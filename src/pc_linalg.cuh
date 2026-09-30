@@ -17,6 +17,10 @@
 #include <utility>
 #include <cuda_runtime.h>
 
+// for gpuMallocChk: an unchecked cudaMalloc here would surface as an illegal
+// memory access inside whichever kernel touched the pointer next.
+#include "pc_runtime.cuh"
+
 // ---- per-column reductions -------------------------------------------------
 static __global__ void PCCol_sqnorm_kernel(const float* A, int n, int m, float* norms) {
     extern __shared__ float sdata_sq[];
@@ -108,7 +112,7 @@ static __global__ void PCNormalize_gram_xy_kernel(int m, int m_b, float* G,
 // Center columns of d_A in place (n x m).
 static void pc_center_columns_device(float* d_A, int n, int m) {
     float* d_sums;
-    cudaMalloc(&d_sums, m * sizeof(float));
+    gpuMallocChk(&d_sums, m * sizeof(float));
     int t = 256;
     PCCol_sum_kernel<<<m, t, t * sizeof(float)>>>(d_A, n, m, d_sums);
     dim3 tb(128, 1);
@@ -145,15 +149,15 @@ static float* pc_sparse_to_dense_device(const int* a_index,
     int* d_idx;
     int* d_ptr;
     float* d_val;
-    cudaMalloc(&d_idx, nnz * sizeof(int));
-    cudaMalloc(&d_ptr, (n + 1) * sizeof(int));
-    cudaMalloc(&d_val, nnz * sizeof(float));
+    gpuMallocChk(&d_idx, nnz * sizeof(int));
+    gpuMallocChk(&d_ptr, (n + 1) * sizeof(int));
+    gpuMallocChk(&d_val, nnz * sizeof(float));
     cudaMemcpy(d_idx, a_index,     nnz * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_ptr, a_positions, (n + 1) * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_val, val_f.data(),nnz * sizeof(float), cudaMemcpyHostToDevice);
 
     float* d_A;
-    cudaMalloc(&d_A, (size_t)n * m * sizeof(float));
+    gpuMallocChk(&d_A, (size_t)n * m * sizeof(float));
     cudaMemset(d_A, 0, (size_t)n * m * sizeof(float));
 
     int t = 128;

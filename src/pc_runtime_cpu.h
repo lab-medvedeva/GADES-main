@@ -11,6 +11,7 @@
 // The CPU RAM guard lives in R (memory_limit_gb), not here.
 // ============================================================================
 
+#include "pc_csc.h"
 #include <algorithm>
 #include <omp.h>
 #include <cblas.h>   // OpenBLAS: openblas_get/set_num_threads

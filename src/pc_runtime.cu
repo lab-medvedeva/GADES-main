@@ -33,7 +33,7 @@ float* g_pin_out = nullptr;   size_t g_pin_out_sz = 0;
 float* g_pin_in_b = nullptr;  size_t g_pin_in_b_sz = 0;
 
 float* pc_pin(float** buf, size_t* cur, size_t sz) {
-    if (sz > *cur) { if (*buf) cudaFreeHost(*buf); cudaMallocHost((void**)buf, sz * sizeof(float)); *cur = sz; }
+    if (sz > *cur) { if (*buf) cudaFreeHost(*buf); gpuErrchk(cudaMallocHost((void**)buf, sz * sizeof(float))); *cur = sz; }
     return *buf;
 }
 float* pc_d2f_pin(const double* src, size_t sz) {

@@ -41,9 +41,25 @@ def _prepare_dense(X) -> np.ndarray:
 
 
 def _prepare_sparse(X):
+    """Canonicalise a sparse matrix for the kernels: CSC, sorted, deduplicated.
+
+    The rank metrics walk the two columns' nonzero lists as a merge, which is
+    only meaningful when row indices are sorted and unique. SciPy guarantees
+    neither: fancy row indexing (``X[gene_order]`` with ``gene_order`` in, say,
+    variance order) returns a matrix with unsorted indices, and the kernels then
+    read it as if it were sorted and return silently wrong distances -- values
+    above 1 for a metric bounded by 1. Canonicalising here makes that
+    unrepresentable rather than merely documented.
+    """
     if not scipy.sparse.issparse(X):
         raise TypeError("Expected a scipy sparse matrix")
+
     csc = scipy.sparse.csc_matrix(X)
+    if not csc.has_canonical_format:
+        if csc is X or csc.data is getattr(X, "data", None):
+            csc = csc.copy()          # never reorder the caller's matrix in place
+        csc.sum_duplicates()          # sorts indices and merges duplicates
+
     indices = np.ascontiguousarray(csc.indices, dtype=np.int32)
     indptr = np.ascontiguousarray(csc.indptr, dtype=np.int32)
     data = np.ascontiguousarray(csc.data, dtype=np.float64)

@@ -179,13 +179,13 @@ extern "C" void matrix_Spearman_sparse_per_cell_pair_distance_same_block(
 
   int* d_i; int* d_p; float* d_v; float* d_zr; float* d_nsq;
   float* d_res; double* d_out;
-  cudaMalloc(&d_i, nnz * sizeof(int));
-  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_v, nnz * sizeof(float));
-  cudaMalloc(&d_zr, n_cells * sizeof(float));
-  cudaMalloc(&d_nsq, n_cells * sizeof(float));
-  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
-  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_i, nnz * sizeof(int));
+  gpuMallocChk(&d_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_v, nnz * sizeof(float));
+  gpuMallocChk(&d_zr, n_cells * sizeof(float));
+  gpuMallocChk(&d_nsq, n_cells * sizeof(float));
+  gpuMallocChk(&d_res, n_cells * n_cells * sizeof(float));
+  gpuMallocChk(&d_out, n_cells * n_cells * sizeof(double));
 
   cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -233,17 +233,17 @@ extern "C" void matrix_Spearman_sparse_per_cell_pair_distance_different_blocks(
   int* d_ai; int* d_ap; float* d_av; float* d_azr; float* d_ansq;
   int* d_bi; int* d_bp; float* d_bv; float* d_bzr; float* d_bnsq;
   float* d_res;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int));
-  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
-  cudaMalloc(&d_av, nnz_a * sizeof(float));
-  cudaMalloc(&d_azr, n_cells_a * sizeof(float));
-  cudaMalloc(&d_ansq, n_cells_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int));
-  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
-  cudaMalloc(&d_bv, nnz_b * sizeof(float));
-  cudaMalloc(&d_bzr, n_cells_b * sizeof(float));
-  cudaMalloc(&d_bnsq, n_cells_b * sizeof(float));
-  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int));
+  gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int));
+  gpuMallocChk(&d_av, nnz_a * sizeof(float));
+  gpuMallocChk(&d_azr, n_cells_a * sizeof(float));
+  gpuMallocChk(&d_ansq, n_cells_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int));
+  gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int));
+  gpuMallocChk(&d_bv, nnz_b * sizeof(float));
+  gpuMallocChk(&d_bzr, n_cells_b * sizeof(float));
+  gpuMallocChk(&d_bnsq, n_cells_b * sizeof(float));
+  gpuMallocChk(&d_res, n_cells_a * n_cells_b * sizeof(float));
 
   cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -291,7 +291,7 @@ extern "C" void matrix_Spearman_distance_same_block(double* a, double* b, double
     rank_columns(array_new, *n, *m);
 
     float* d_array;
-    cudaMalloc(&d_array, array_size * sizeof(float));
+    gpuMallocChk(&d_array, array_size * sizeof(float));
     cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
 
     int threads = 128;
@@ -299,15 +299,15 @@ extern "C" void matrix_Spearman_distance_same_block(double* a, double* b, double
 
     float* d_result;
     float* h_result = new float[(*m) * (*m)];
-    cudaMalloc(&d_result, (*m) * (*m) * sizeof(float));
+    gpuMallocChk(&d_result, (*m) * (*m) * sizeof(float));
     cudaMemset(d_result, 0, (*m) * (*m) * sizeof(float));
 
     float* d_x_norm_result;
-    cudaMalloc(&d_x_norm_result, (*m) * (*m) * sizeof(float));
+    gpuMallocChk(&d_x_norm_result, (*m) * (*m) * sizeof(float));
     cudaMemset(d_x_norm_result, 0, (*m) * (*m) * sizeof(float));
 
     float* d_y_norm_result;
-    cudaMalloc(&d_y_norm_result, (*m) * (*m) * sizeof(float));
+    gpuMallocChk(&d_y_norm_result, (*m) * (*m) * sizeof(float));
     cudaMemset(d_y_norm_result, 0, (*m) * (*m) * sizeof(float));
 
     RcosineCorr_gpu_atomic_float_same_block<<<blocks, threads>>>(
@@ -361,8 +361,8 @@ extern "C" void matrix_Spearman_distance_different_blocks(double* a, double* b, 
 
     float* d_array;
     float* d_array2;
-    cudaMalloc(&d_array, array_size * sizeof(float));
-    cudaMalloc(&d_array2, array2_size * sizeof(float));
+    gpuMallocChk(&d_array, array_size * sizeof(float));
+    gpuMallocChk(&d_array2, array2_size * sizeof(float));
     cudaMemcpy(d_array, array_new, array_size * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_array2, array2_new, array2_size * sizeof(float), cudaMemcpyHostToDevice);
 
@@ -376,11 +376,11 @@ extern "C" void matrix_Spearman_distance_different_blocks(double* a, double* b, 
     float* prod2;
     float* h_prod2 = new float[(*m) * (*m_b)];
 
-    cudaMalloc(&scalar, (*m) * (*m_b) * sizeof(float));
+    gpuMallocChk(&scalar, (*m) * (*m_b) * sizeof(float));
     cudaMemset(scalar, 0, (*m) * (*m_b) * sizeof(float));
-    cudaMalloc(&prod1, (*m) * (*m_b) * sizeof(float));
+    gpuMallocChk(&prod1, (*m) * (*m_b) * sizeof(float));
     cudaMemset(prod1, 0, (*m) * (*m_b) * sizeof(float));
-    cudaMalloc(&prod2, (*m) * (*m_b) * sizeof(float));
+    gpuMallocChk(&prod2, (*m) * (*m_b) * sizeof(float));
     cudaMemset(prod2, 0, (*m) * (*m_b) * sizeof(float));
 
     RcosineCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(
@@ -425,7 +425,7 @@ extern "C" void matrix_Spearman_sparse_distance_same_block(
     float* dense = csr_to_ranked_dense(a_index, a_positions, a_double_values, rows, columns);
 
     float* d_array;
-    cudaMalloc(&d_array, rows * columns * sizeof(float));
+    gpuMallocChk(&d_array, rows * columns * sizeof(float));
     cudaMemcpy(d_array, dense, rows * columns * sizeof(float), cudaMemcpyHostToDevice);
 
     int threads = 128;
@@ -433,15 +433,15 @@ extern "C" void matrix_Spearman_sparse_distance_same_block(
 
     float* d_result;
     float* h_result = new float[columns * columns];
-    cudaMalloc(&d_result, columns * columns * sizeof(float));
+    gpuMallocChk(&d_result, columns * columns * sizeof(float));
     cudaMemset(d_result, 0, columns * columns * sizeof(float));
 
     float* d_x_norm;
-    cudaMalloc(&d_x_norm, columns * columns * sizeof(float));
+    gpuMallocChk(&d_x_norm, columns * columns * sizeof(float));
     cudaMemset(d_x_norm, 0, columns * columns * sizeof(float));
 
     float* d_y_norm;
-    cudaMalloc(&d_y_norm, columns * columns * sizeof(float));
+    gpuMallocChk(&d_y_norm, columns * columns * sizeof(float));
     cudaMemset(d_y_norm, 0, columns * columns * sizeof(float));
 
     RcosineCorr_gpu_atomic_float_same_block<<<blocks, threads>>>(
@@ -491,8 +491,8 @@ extern "C" void matrix_Spearman_sparse_distance_different_blocks(
 
     float* d_array;
     float* d_array2;
-    cudaMalloc(&d_array, rows * columns * sizeof(float));
-    cudaMalloc(&d_array2, rows * columns_b * sizeof(float));
+    gpuMallocChk(&d_array, rows * columns * sizeof(float));
+    gpuMallocChk(&d_array2, rows * columns_b * sizeof(float));
     cudaMemcpy(d_array, dense_a, rows * columns * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_array2, dense_b, rows * columns_b * sizeof(float), cudaMemcpyHostToDevice);
 
@@ -506,11 +506,11 @@ extern "C" void matrix_Spearman_sparse_distance_different_blocks(
     float* prod2;
     float* h_prod2 = new float[columns * columns_b];
 
-    cudaMalloc(&scalar, columns * columns_b * sizeof(float));
+    gpuMallocChk(&scalar, columns * columns_b * sizeof(float));
     cudaMemset(scalar, 0, columns * columns_b * sizeof(float));
-    cudaMalloc(&prod1, columns * columns_b * sizeof(float));
+    gpuMallocChk(&prod1, columns * columns_b * sizeof(float));
     cudaMemset(prod1, 0, columns * columns_b * sizeof(float));
-    cudaMalloc(&prod2, columns * columns_b * sizeof(float));
+    gpuMallocChk(&prod2, columns * columns_b * sizeof(float));
     cudaMemset(prod2, 0, columns * columns_b * sizeof(float));
 
     RcosineCorr_gpu_atomic_float_different_blocks<<<blocks_in_row, threads>>>(

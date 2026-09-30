@@ -23,8 +23,8 @@ static void pc_drive_euclidean_same(double* a, double* c, int n, int m) {
     for (size_t i = 0; i < sz; ++i) h[i] = (float)a[i];
 
     float *d_A, *d_D;
-    cudaMalloc(&d_A, sz * sizeof(float));
-    cudaMalloc(&d_D, (size_t)m * m * sizeof(float));
+    gpuMallocChk(&d_A, sz * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m * sizeof(float));
     cudaMemcpy(d_A, h.data(), sz * sizeof(float), cudaMemcpyHostToDevice);
     pc_euclidean_same_block_device(d_A, n, m, d_D);
 
@@ -45,9 +45,9 @@ static void pc_drive_euclidean_diff(double* a, double* b, double* c, int n,
     for (size_t i = 0; i < szB; ++i) hB[i] = (float)b[i];
 
     float *d_A, *d_B, *d_D;
-    cudaMalloc(&d_A, szA * sizeof(float));
-    cudaMalloc(&d_B, szB * sizeof(float));
-    cudaMalloc(&d_D, (size_t)m * m_b * sizeof(float));
+    gpuMallocChk(&d_A, szA * sizeof(float));
+    gpuMallocChk(&d_B, szB * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m_b * sizeof(float));
     cudaMemcpy(d_A, hA.data(), szA * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, hB.data(), szB * sizeof(float), cudaMemcpyHostToDevice);
     pc_euclidean_different_blocks_device(d_A, d_B, n, m, m_b, d_D);
@@ -68,7 +68,7 @@ static void pc_drive_sparse_euclidean_same(int* a_index, int* a_positions,
                                            n, m, nnz);
     if(L) cudaDeviceSynchronize(); double t1=L?omp_get_wtime():0;
     float* d_D;
-    cudaMalloc(&d_D, (size_t)m * m * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m * sizeof(float));
     pc_euclidean_same_block_device(d_A, n, m, d_D);
     if(L) cudaDeviceSynchronize(); double t2=L?omp_get_wtime():0;
 
@@ -94,7 +94,7 @@ static void pc_drive_sparse_euclidean_diff(int* a_index, int* a_positions,
     float* d_B = pc_sparse_to_dense_device(b_index, b_positions, b_values,
                                            n, m_b, nnz_b);
     float* d_D;
-    cudaMalloc(&d_D, (size_t)m * m_b * sizeof(float));
+    gpuMallocChk(&d_D, (size_t)m * m_b * sizeof(float));
     pc_euclidean_different_blocks_device(d_A, d_B, n, m, m_b, d_D);
 
     std::vector<float> out((size_t)m * m_b);
@@ -442,11 +442,11 @@ extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_same_block(
   for (int k = 0; k < nnz; ++k) csc_x_f[k] = (float)csc_x_in[k];
 
   int* d_i; int* d_p; float* d_x; float* d_res; double* d_out;
-  cudaMalloc(&d_i, nnz * sizeof(int));
-  cudaMalloc(&d_p, (n_cells + 1) * sizeof(int));
-  cudaMalloc(&d_x, nnz * sizeof(float));
-  cudaMalloc(&d_res, n_cells * n_cells * sizeof(float));
-  cudaMalloc(&d_out, n_cells * n_cells * sizeof(double));
+  gpuMallocChk(&d_i, nnz * sizeof(int));
+  gpuMallocChk(&d_p, (n_cells + 1) * sizeof(int));
+  gpuMallocChk(&d_x, nnz * sizeof(float));
+  gpuMallocChk(&d_res, n_cells * n_cells * sizeof(float));
+  gpuMallocChk(&d_out, n_cells * n_cells * sizeof(double));
 
   cudaMemcpy(d_i, csc_i_in, nnz * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_p, csc_p_in, (n_cells + 1) * sizeof(int), cudaMemcpyHostToDevice);
@@ -484,13 +484,13 @@ extern "C" void matrix_Euclidean_sparse_per_cell_pair_distance_different_blocks(
   int* d_ai; int* d_ap; float* d_ax;
   int* d_bi; int* d_bp; float* d_bx;
   float* d_res;
-  cudaMalloc(&d_ai, nnz_a * sizeof(int));
-  cudaMalloc(&d_ap, (n_cells_a + 1) * sizeof(int));
-  cudaMalloc(&d_ax, nnz_a * sizeof(float));
-  cudaMalloc(&d_bi, nnz_b * sizeof(int));
-  cudaMalloc(&d_bp, (n_cells_b + 1) * sizeof(int));
-  cudaMalloc(&d_bx, nnz_b * sizeof(float));
-  cudaMalloc(&d_res, n_cells_a * n_cells_b * sizeof(float));
+  gpuMallocChk(&d_ai, nnz_a * sizeof(int));
+  gpuMallocChk(&d_ap, (n_cells_a + 1) * sizeof(int));
+  gpuMallocChk(&d_ax, nnz_a * sizeof(float));
+  gpuMallocChk(&d_bi, nnz_b * sizeof(int));
+  gpuMallocChk(&d_bp, (n_cells_b + 1) * sizeof(int));
+  gpuMallocChk(&d_bx, nnz_b * sizeof(float));
+  gpuMallocChk(&d_res, n_cells_a * n_cells_b * sizeof(float));
 
   cudaMemcpy(d_ai, a_i_in, nnz_a * sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_ap, a_p_in, (n_cells_a + 1) * sizeof(int), cudaMemcpyHostToDevice);
