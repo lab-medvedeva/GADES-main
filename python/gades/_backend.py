@@ -1,8 +1,8 @@
 import ctypes
 import os
 import sys
+from ctypes import POINTER, c_double, c_int
 from pathlib import Path
-from ctypes import c_int, c_double, POINTER
 
 c_double_p = POINTER(c_double)
 c_int_p = POINTER(c_int)
@@ -144,7 +144,7 @@ class _Backend:
             return False
         try:
             return lib.gades_gpu_available() == 1
-        except Exception:
+        except (AttributeError, OSError):
             return False
 
 

@@ -32,7 +32,7 @@ from __future__ import annotations
 import numpy as np
 import scipy.sparse
 
-__all__ = ["H5adReader", "h5ad_info", "read_obs", "distance_from_h5ad"]
+__all__ = ["H5adReader", "distance_from_h5ad", "h5ad_info", "read_obs"]
 
 _CHUNK = 8192
 
@@ -60,7 +60,7 @@ def _decode(values):
 def _read_dataframe_column(group, name):
     """Read one obs/var column, expanding anndata's categorical encoding."""
     node = group[name]
-    if hasattr(node, "keys") and "codes" in node:            # categorical
+    if hasattr(node, "keys") and "codes" in node:  # categorical
         codes = node["codes"][:]
         categories = _decode(node["categories"][:])
         out = np.empty(len(codes), dtype=object)
@@ -251,9 +251,7 @@ class H5adReader:
         if indices.size == 0:
             raise ValueError("indices is empty")
         if indices.min() < 0 or indices.max() >= self.n_cells:
-            raise ValueError(
-                f"cell indices out of range [0, {self.n_cells})"
-            )
+            raise ValueError(f"cell indices out of range [0, {self.n_cells})")
 
         order = np.argsort(indices, kind="stable")
         wanted = indices[order]
@@ -317,7 +315,7 @@ def read_obs(path, columns=None, as_frame=True):
         return reader.obs(columns=columns, as_frame=as_frame)
 
 
-_DEFAULT_MAX_OUTPUT = 8 * 1024 ** 3
+_DEFAULT_MAX_OUTPUT = 8 * 1024**3
 
 
 def _check_output_size(n_cells, max_bytes=_DEFAULT_MAX_OUTPUT):
@@ -330,7 +328,7 @@ def _check_output_size(n_cells, max_bytes=_DEFAULT_MAX_OUTPUT):
     if needed > max_bytes:
         raise MemoryError(
             f"the distance matrix for {n_cells} cells would need "
-            f"{needed / 1024 ** 3:.1f} GiB (limit {max_bytes / 1024 ** 3:.1f} GiB); "
+            f"{needed / 1024**3:.1f} GiB (limit {max_bytes / 1024**3:.1f} GiB); "
             "subset `cells` first, or raise max_output_bytes"
         )
 

@@ -1,11 +1,9 @@
+import gades
 import numpy as np
 import pytest
 import scipy.sparse
 import scipy.spatial.distance
 from numpy.testing import assert_allclose
-
-import gades
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -245,16 +243,17 @@ def _unsorted_row_slice(seed=0, n_genes=600, n_cells=120, density=0.4):
     ordinary way to get here, and it used to produce silently wrong distances.
     """
     rng = np.random.default_rng(seed)
-    base = scipy.sparse.random(n_genes, n_cells, density=density, format="csc",
-                               random_state=seed)
+    base = scipy.sparse.random(
+        n_genes, n_cells, density=density, format="csc", random_state=seed
+    )
     base.data = np.ceil(base.data * 10)
-    order = rng.permutation(n_genes)[: n_genes // 2]     # ranking order, not index order
+    order = rng.permutation(n_genes)[: n_genes // 2]  # ranking order, not index order
     return base[order], base[np.sort(order)], order
 
 
 def test_unsorted_sparse_indices_give_the_same_answer_as_sorted():
-    unsorted, sorted_same_genes, _ = _unsorted_row_slice()
-    assert not unsorted.has_sorted_indices                # precondition of the bug
+    unsorted, _, _ = _unsorted_row_slice()
+    assert not unsorted.has_sorted_indices  # precondition of the bug
 
     dense_ref = gades.distance(
         np.asfortranarray(np.asarray(unsorted.todense(), dtype=np.float64)),
@@ -270,8 +269,11 @@ def test_unsorted_sparse_indices_give_the_same_answer_as_sorted():
 def test_unsorted_matches_dense_for_every_metric(metric):
     unsorted, _, _ = _unsorted_row_slice(seed=3)
     dense = np.asfortranarray(np.asarray(unsorted.todense(), dtype=np.float64))
-    assert_allclose(gades.distance(unsorted, metric=metric),
-                    gades.distance(dense, metric=metric), atol=1e-5)
+    assert_allclose(
+        gades.distance(unsorted, metric=metric),
+        gades.distance(dense, metric=metric),
+        atol=1e-5,
+    )
 
 
 def test_kendall_distance_never_exceeds_one():
@@ -290,12 +292,15 @@ def test_duplicate_entries_are_summed_not_passed_through():
     vals = rng.random(3000) * 5
     coo = scipy.sparse.coo_matrix((vals, (rows, cols)), shape=(n_genes, n_cells))
     duped = scipy.sparse.csc_matrix(coo, copy=True)
-    duped.sum_duplicates = lambda: None                  # keep the duplicates in place
+    duped.sum_duplicates = lambda: None  # keep the duplicates in place
     reference = gades.distance(
         np.asfortranarray(np.asarray(coo.todense(), dtype=np.float64)), metric="kendall"
     )
-    assert_allclose(gades.distance(scipy.sparse.csc_matrix(coo), metric="kendall"),
-                    reference, atol=1e-9)
+    assert_allclose(
+        gades.distance(scipy.sparse.csc_matrix(coo), metric="kendall"),
+        reference,
+        atol=1e-9,
+    )
 
 
 def test_pairwise_also_canonicalises():
@@ -303,8 +308,9 @@ def test_pairwise_also_canonicalises():
     left, right = unsorted[:, :60], unsorted[:, 60:]
     dense = np.asfortranarray(np.asarray(unsorted.todense(), dtype=np.float64))
     reference = gades.pairwise_distance(dense[:, :60], dense[:, 60:], metric="kendall")
-    assert_allclose(gades.pairwise_distance(left, right, metric="kendall"),
-                    reference, atol=1e-9)
+    assert_allclose(
+        gades.pairwise_distance(left, right, metric="kendall"), reference, atol=1e-9
+    )
 
 
 # ── the C-level backstop, reached by bypassing the Python wrapper ──────────
@@ -324,15 +330,19 @@ def _call_sparse_abi(matrix, metric_code, backend):
         indptr.ctypes.data_as(fn.argtypes[1]),
         data.ctypes.data_as(fn.argtypes[2]),
         out.ctypes.data_as(fn.argtypes[3]),
-        n, m, matrix.nnz, metric_code,
+        n,
+        m,
+        matrix.nnz,
+        metric_code,
     )
     assert rc == 0
     return np.ascontiguousarray(out), indices, data
 
 
 @pytest.mark.parametrize("backend", ["cpu", "gpu"])
-@pytest.mark.parametrize("metric_code,metric", [(5, "kendall"), (4, "spearman"),
-                                                (3, "manhattan")])
+@pytest.mark.parametrize(
+    "metric_code,metric", [(5, "kendall"), (4, "spearman"), (3, "manhattan")]
+)
 def test_c_abi_repairs_unsorted_indices(backend, metric_code, metric):
     """The wrapper canonicalises, but the C ABI must not trust its caller."""
     if backend == "gpu" and not gades.has_gpu():
@@ -372,5 +382,6 @@ def test_c_abi_leaves_already_sorted_input_alone(backend):
     assert sorted_matrix.has_sorted_indices
     dense = np.asfortranarray(np.asarray(sorted_matrix.todense(), dtype=np.float64))
     out, _, _ = _call_sparse_abi(sorted_matrix, 5, backend)
-    assert_allclose(out, gades.distance(dense, metric="kendall", backend=backend),
-                    atol=1e-9)
+    assert_allclose(
+        out, gades.distance(dense, metric="kendall", backend=backend), atol=1e-9
+    )

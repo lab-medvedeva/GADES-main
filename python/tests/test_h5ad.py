@@ -1,8 +1,7 @@
+import gades
 import numpy as np
 import pytest
 import scipy.sparse
-
-import gades
 
 h5py = pytest.importorskip("h5py")
 
@@ -137,7 +136,7 @@ def test_take_cells_spanning_chunks(csr_file):
 
 
 def test_take_cells_matches_contiguous_slice(csr_file):
-    path, X, _ = csr_file
+    path, _, _ = csr_file
     with gades.H5adReader(path) as reader:
         by_range = reader.slice_cells(20, 45).toarray()
         by_index = reader.take_cells(np.arange(20, 45)).toarray()
@@ -165,7 +164,7 @@ def test_obs_is_read_without_touching_the_matrix(csr_file):
 
 
 def test_obs_column_subset(csr_file):
-    path, _, obs = csr_file
+    path, _, _ = csr_file
     frame = gades.read_obs(path, columns=["batch"])
     assert list(frame.columns) == ["batch"]
 
@@ -180,7 +179,7 @@ def test_info(csr_file):
 
 
 def test_names(csr_file):
-    path, X, _ = csr_file
+    path, _, _ = csr_file
     with gades.H5adReader(path) as reader:
         assert list(reader.obs_names()[:2]) == ["cell0", "cell1"]
         assert list(reader.var_names()[:2]) == ["gene0", "gene1"]
@@ -232,9 +231,9 @@ def test_distance_from_h5ad_with_layer_and_genes(csr_file):
 def test_oversized_output_is_refused_before_allocating():
     from gades.h5ad import _check_output_size
 
-    _check_output_size(30_000)                       # 6.7 GiB, under the default
+    _check_output_size(30_000)  # 6.7 GiB, under the default
     with pytest.raises(MemoryError, match="GiB"):
-        _check_output_size(40_000)                   # 11.9 GiB, over it
+        _check_output_size(40_000)  # 11.9 GiB, over it
 
 
 def test_output_guard_fires_through_the_public_api(csr_file):
@@ -251,9 +250,11 @@ def test_output_guard_fires_through_the_public_api(csr_file):
 @pytest.mark.parametrize("start, stop", [(-1, 10), (10, 10), (0, 999), (50, 20)])
 def test_invalid_cell_range(csr_file, start, stop):
     path, _, _ = csr_file
-    with gades.H5adReader(path) as reader:
-        with pytest.raises(ValueError, match="invalid cell range"):
-            reader.slice_cells(start, stop)
+    with (
+        gades.H5adReader(path) as reader,
+        pytest.raises(ValueError, match="invalid cell range"),
+    ):
+        reader.slice_cells(start, stop)
 
 
 def test_out_of_range_indices(csr_file):

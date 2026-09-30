@@ -19,9 +19,9 @@ Quick start::
     D_sp = gades.distance(X_sp, metric="cosine", backend="cpu")
 """
 
-from .distance import distance, pairwise_distance, METRICS
-from .h5ad import H5adReader, distance_from_h5ad, h5ad_info, read_obs
 from ._backend import backend as _backend
+from .distance import METRICS, distance, pairwise_distance
+from .h5ad import H5adReader, distance_from_h5ad, h5ad_info, read_obs
 
 __version__ = "2.0.0b1"
 
@@ -34,13 +34,13 @@ def has_gpu() -> bool:
 
 
 __all__ = [
-    "distance",
-    "pairwise_distance",
-    "has_gpu",
     "SUPPORTED_METRICS",
     "H5adReader",
-    "h5ad_info",
-    "read_obs",
-    "distance_from_h5ad",
     "__version__",
+    "distance",
+    "distance_from_h5ad",
+    "h5ad_info",
+    "has_gpu",
+    "pairwise_distance",
+    "read_obs",
 ]
